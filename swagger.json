@@ -10,6 +10,10 @@
   },
   "servers": [
     {
+      "url": "https://rad5-communication-983274156962.europe-west1.run.app/api",
+      "description": "Production server (Cloud Run)"
+    },
+    {
       "url": "http://localhost:3000/api",
       "description": "Development server"
     }
