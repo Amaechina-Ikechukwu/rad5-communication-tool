@@ -1,14 +1,10 @@
 import { Sequelize } from 'sequelize';
-import { Connector, IpAddressTypes, AuthTypes } from '@google-cloud/cloud-sql-connector';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Check if running in Cloud Run with Cloud SQL connection name
-const cloudSqlConnectionName = process.env.CLOUD_SQL_CONNECTION_NAME;
-
-// Initialize sequelize synchronously for local, async for Cloud SQL
-let sequelize: Sequelize = new Sequelize({
+// Direct TCP connection - works for both local and Cloud SQL with public IP
+const sequelize = new Sequelize({
   dialect: 'postgres',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
@@ -24,32 +20,8 @@ let sequelize: Sequelize = new Sequelize({
   },
 });
 
-const initCloudSqlSequelize = async (): Promise<Sequelize> => {
-  console.log('🔄 Using Cloud SQL Connector...');
-  const connector = new Connector();
-  const clientOpts = await connector.getOptions({
-    instanceConnectionName: cloudSqlConnectionName!,
-    ipType: IpAddressTypes.PUBLIC,
-    authType: AuthTypes.PASSWORD,
-  });
-
-  return new Sequelize({
-    dialect: 'postgres',
-    database: process.env.DB_NAME || 'rad5_comms',
-    username: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '',
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    dialectOptions: clientOpts,
-  });
-};
-
 export const connectDB = async (): Promise<void> => {
   try {
-    // Use Cloud SQL Connector if connection name is provided
-    if (cloudSqlConnectionName) {
-      sequelize = await initCloudSqlSequelize();
-    }
-    
     await sequelize.authenticate();
     console.log('✅ PostgreSQL connected successfully');
     
