@@ -1,5 +1,5 @@
 import { Sequelize } from 'sequelize';
-import { Connector, IpAddressTypes } from '@google-cloud/cloud-sql-connector';
+import { Connector, IpAddressTypes, AuthTypes } from '@google-cloud/cloud-sql-connector';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,6 +30,7 @@ const initCloudSqlSequelize = async (): Promise<Sequelize> => {
   const clientOpts = await connector.getOptions({
     instanceConnectionName: cloudSqlConnectionName!,
     ipType: IpAddressTypes.PUBLIC,
+    authType: AuthTypes.PASSWORD,
   });
 
   return new Sequelize({
