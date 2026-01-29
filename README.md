@@ -12,15 +12,14 @@ A real-time communication platform API supporting messaging, channels, file shar
 
 ## Installation
 
-```bash
+bash
 bun install
-```
 
 ## Environment Variables
 
 Create a `.env` file with:
 
-```env
+env
 PORT=3000
 DB_HOST=localhost
 DB_PORT=5432
@@ -36,25 +35,21 @@ SMTP_PORT=587
 SMTP_USER=your_email
 SMTP_PASS=your_password
 FRONTEND_URL=http://localhost:3000
-```
 
 ## Running
 
-```bash
+bash
 # Development
 bun run dev
 
 # Production
 bun run start
-```
 
 ## API Documentation
 
 Interactive Swagger documentation is available at:
 
-```
 http://localhost:3000/api-docs
-```
 
 ## API Endpoints
 
@@ -92,15 +87,14 @@ Connect to `ws://localhost:3000/ws` for real-time updates.
 
 ## Testing
 
-```bash
+bash
 bun test
-```
 
 ## Tech Stack
 
 - **Runtime**: Bun
 - **Framework**: Express.js
-- **Database**: PostgreSQL with Sequelize ORM
+- **Database**: PostgreSQL with Sequelize ORM (Google Cloud SQL support)
 - **Authentication**: JWT
 - **File Storage**: Cloudinary
 - **Real-time**: Socket.io
