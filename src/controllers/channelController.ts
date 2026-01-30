@@ -1,4 +1,5 @@
 import type { Response } from 'express';
+import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
 import { Channel, ChannelMember, User, Message } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 
@@ -6,6 +7,18 @@ import type { AuthRequest } from '../middleware/auth';
 export const getChannels = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
+    const { search, filter } = req.query;
+
+    // Build channel filter based on query params
+    const channelWhere: any = {};
+    
+    if (search && typeof search === 'string') {
+      const searchTerm = search.toLowerCase().trim();
+      channelWhere[Op.or] = [
+        sequelizeWhere(fn('LOWER', col('channel.name')), { [Op.like]: `%${searchTerm}%` }),
+        sequelizeWhere(fn('LOWER', col('channel.description')), { [Op.like]: `%${searchTerm}%` }),
+      ];
+    }
 
     // Get all channels the user is a member of
     const memberships = await ChannelMember.findAll({
@@ -14,6 +27,7 @@ export const getChannels = async (req: AuthRequest, res: Response): Promise<void
         {
           model: Channel,
           as: 'channel',
+          where: Object.keys(channelWhere).length > 0 ? channelWhere : undefined,
           include: [
             {
               model: User,
@@ -26,12 +40,61 @@ export const getChannels = async (req: AuthRequest, res: Response): Promise<void
       ],
     });
 
-    const channels = memberships.map((m: any) => ({
-      ...m.channel.toJSON(),
-      role: m.role,
-    }));
+    // Get unread counts for each channel
+    let channelsWithDetails = await Promise.all(
+      memberships.map(async (m: any) => {
+        const unreadCount = await Message.count({
+          where: {
+            channelId: m.channelId,
+            isDeleted: false,
+            senderId: { [Op.ne]: userId },
+            ...(m.lastReadAt && { createdAt: { [Op.gt]: m.lastReadAt } }),
+          },
+        });
 
-    res.json({ channels });
+        return {
+          ...m.channel.toJSON(),
+          role: m.role,
+          isArchived: m.isArchived,
+          isStarred: m.isStarred,
+          isMuted: m.isMuted,
+          unreadCount,
+        };
+      })
+    );
+
+    // Apply additional filters
+    if (filter && typeof filter === 'string') {
+      switch (filter.toLowerCase()) {
+        case 'starred':
+          channelsWithDetails = channelsWithDetails.filter(c => c.isStarred);
+          break;
+        case 'archived':
+          channelsWithDetails = channelsWithDetails.filter(c => c.isArchived);
+          break;
+        case 'muted':
+          channelsWithDetails = channelsWithDetails.filter(c => c.isMuted);
+          break;
+        case 'unread':
+          channelsWithDetails = channelsWithDetails.filter(c => c.unreadCount > 0);
+          break;
+        case 'groups':
+          channelsWithDetails = channelsWithDetails.filter(c => c.isGroup);
+          break;
+        case 'personal':
+          channelsWithDetails = channelsWithDetails.filter(c => !c.isGroup);
+          break;
+        case 'active':
+          // Exclude archived channels
+          channelsWithDetails = channelsWithDetails.filter(c => !c.isArchived);
+          break;
+      }
+    } else {
+      // By default, exclude archived channels unless specifically filtered
+      channelsWithDetails = channelsWithDetails.filter(c => !c.isArchived);
+    }
+
+    res.json({ channels: channelsWithDetails });
   } catch (error) {
     console.error('Get channels error:', error);
     res.status(500).json({ error: 'Failed to fetch channels' });
@@ -254,5 +317,301 @@ export const removeMember = async (req: AuthRequest, res: Response): Promise<voi
   } catch (error) {
     console.error('Remove member error:', error);
     res.status(500).json({ error: 'Failed to remove member' });
+  }
+};
+
+// POST /api/channels/:id/archive
+export const archiveChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // Toggle archive status
+    const newStatus = !membership.isArchived;
+    await membership.update({ isArchived: newStatus });
+
+    res.json({ 
+      message: newStatus ? 'Channel archived successfully' : 'Channel unarchived successfully',
+      isArchived: newStatus
+    });
+  } catch (error) {
+    console.error('Archive channel error:', error);
+    res.status(500).json({ error: 'Failed to archive channel' });
+  }
+};
+
+// POST /api/channels/:id/star
+export const starChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // Toggle star status
+    const newStatus = !membership.isStarred;
+    await membership.update({ isStarred: newStatus });
+
+    res.json({ 
+      message: newStatus ? 'Channel starred successfully' : 'Channel unstarred successfully',
+      isStarred: newStatus
+    });
+  } catch (error) {
+    console.error('Star channel error:', error);
+    res.status(500).json({ error: 'Failed to star channel' });
+  }
+};
+
+// POST /api/channels/:id/mute
+export const muteChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // Toggle mute status
+    const newStatus = !membership.isMuted;
+    await membership.update({ isMuted: newStatus });
+
+    res.json({ 
+      message: newStatus ? 'Channel muted successfully' : 'Channel unmuted successfully',
+      isMuted: newStatus
+    });
+  } catch (error) {
+    console.error('Mute channel error:', error);
+    res.status(500).json({ error: 'Failed to mute channel' });
+  }
+};
+
+// POST /api/channels/:id/read
+export const markChannelAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    await membership.update({ lastReadAt: new Date() });
+
+    res.json({ 
+      message: 'Channel marked as read',
+      lastReadAt: membership.lastReadAt
+    });
+  } catch (error) {
+    console.error('Mark channel as read error:', error);
+    res.status(500).json({ error: 'Failed to mark channel as read' });
+  }
+};
+
+// GET /api/channels/personal/:userId - Get or create personal chat with a user
+export const getPersonalChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot create personal chat with yourself' });
+      return;
+    }
+
+    // Check if recipient exists
+    const recipient = await User.findByPk(recipientId);
+    if (!recipient) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Find existing personal chat (non-group channel) between these two users
+    const existingChannels = await Channel.findAll({
+      where: { isGroup: false },
+      include: [
+        {
+          model: User,
+          as: 'members',
+          attributes: ['id'],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    let personalChat = existingChannels.find((channel: any) => {
+      const memberIds = channel.members.map((m: any) => m.id);
+      return memberIds.length === 2 && 
+             memberIds.includes(userId) && 
+             memberIds.includes(recipientId);
+    });
+
+    if (!personalChat) {
+      // Create new personal chat
+      personalChat = await Channel.create({
+        name: `${req.user!.name} - ${recipient.name}`,
+        isGroup: false,
+        createdBy: userId,
+      });
+
+      // Add both users as members
+      await Promise.all([
+        ChannelMember.create({
+          channelId: personalChat.id,
+          userId,
+          role: 'member',
+        }),
+        ChannelMember.create({
+          channelId: personalChat.id,
+          userId: recipientId,
+          role: 'member',
+        }),
+      ]);
+    }
+
+    // Fetch channel with members and membership details
+    const channelWithDetails = await Channel.findByPk(personalChat.id, {
+      include: [
+        {
+          model: User,
+          as: 'members',
+          attributes: ['id', 'name', 'avatar', 'isOnline', 'lastActive'],
+          through: { attributes: ['role'] },
+        },
+      ],
+    });
+
+    // Get user's membership for channel settings
+    const membership = await ChannelMember.findOne({
+      where: { channelId: personalChat.id, userId },
+    });
+
+    // Get unread count
+    const unreadCount = await Message.count({
+      where: {
+        channelId: personalChat.id,
+        isDeleted: false,
+        senderId: { [Op.ne]: userId },
+        ...(membership?.lastReadAt && { createdAt: { [Op.gt]: membership.lastReadAt } }),
+      },
+    });
+
+    res.json({
+      channel: {
+        ...channelWithDetails?.toJSON(),
+        isArchived: membership?.isArchived || false,
+        isStarred: membership?.isStarred || false,
+        isMuted: membership?.isMuted || false,
+        unreadCount,
+      },
+    });
+  } catch (error) {
+    console.error('Get personal chat error:', error);
+    res.status(500).json({ error: 'Failed to get personal chat' });
+  }
+};
+
+// GET /api/channels/personal/:userId/messages - Get messages from personal chat
+export const getPersonalChatMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const { page = 1, limit = 50, before } = req.query;
+    const userId = req.user!.id;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    // Find personal chat channel
+    const existingChannels = await Channel.findAll({
+      where: { isGroup: false },
+      include: [
+        {
+          model: User,
+          as: 'members',
+          attributes: ['id'],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    const personalChat = existingChannels.find((channel: any) => {
+      const memberIds = channel.members.map((m: any) => m.id);
+      return memberIds.length === 2 && 
+             memberIds.includes(userId) && 
+             memberIds.includes(recipientId);
+    });
+
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    const whereClause: any = { channelId: personalChat.id, isDeleted: false };
+    if (before) {
+      whereClause.createdAt = { [Op.lt]: new Date(before as string) };
+    }
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+      ],
+      limit: Number(limit),
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Format messages
+    const formattedMessages = messages.map((msg: any) => ({
+      id: msg.id,
+      sender: msg.sender,
+      text: msg.text,
+      time: msg.createdAt,
+      isOwn: msg.senderId === userId,
+      isEdited: msg.isEdited,
+      attachments: msg.attachments,
+      audio: msg.audio,
+    }));
+
+    res.json({
+      messages: formattedMessages.reverse(),
+      pagination: {
+        total: count,
+        page: Number(page),
+        limit: Number(limit),
+        hasMore: offset + messages.length < count,
+      },
+    });
+  } catch (error) {
+    console.error('Get personal chat messages error:', error);
+    res.status(500).json({ error: 'Failed to fetch personal chat messages' });
   }
 };

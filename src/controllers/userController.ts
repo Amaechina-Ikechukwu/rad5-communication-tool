@@ -1,5 +1,6 @@
 import type { Response } from 'express';
-import { User } from '../models';
+import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
+import { User, ChannelMember, Message } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary } from '../utils/cloudinary';
 
@@ -10,8 +11,16 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     const offset = (Number(page) - 1) * Number(limit);
 
     const whereClause: any = {};
-    if (search) {
-      whereClause.name = { [require('sequelize').Op.like]: `%${search}%` };
+    
+    if (search && typeof search === 'string') {
+      const searchTerm = search.toLowerCase().trim();
+      
+      // Use case-insensitive search with ILIKE (PostgreSQL)
+      // Search across name and email fields
+      whereClause[Op.or] = [
+        sequelizeWhere(fn('LOWER', col('name')), { [Op.like]: `%${searchTerm}%` }),
+        sequelizeWhere(fn('LOWER', col('email')), { [Op.like]: `%${searchTerm}%` }),
+      ];
     }
 
     const { count, rows: users } = await User.findAndCountAll({
@@ -19,7 +28,19 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
       attributes: ['id', 'name', 'email', 'avatar', 'bio', 'lastSeen', 'profileVisibility', 'isOnline', 'lastActive'],
       limit: Number(limit),
       offset,
-      order: [['name', 'ASC']],
+      order: [
+        // Order by relevance: exact matches first, then partial matches
+        ...(search ? [
+          [fn('CASE', 
+            sequelizeWhere(fn('LOWER', col('name')), search.toString().toLowerCase()), 
+            0,
+            sequelizeWhere(fn('LOWER', col('name')), { [Op.like]: `${search.toString().toLowerCase()}%` }),
+            1,
+            2
+          ), 'ASC']
+        ] as any : []),
+        ['name', 'ASC'],
+      ],
     });
 
     res.json({
@@ -66,14 +87,39 @@ export const getUser = async (req: AuthRequest, res: Response): Promise<void> =>
 // GET /api/users/me
 export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const user = await User.findByPk(req.user!.id);
+    const userId = req.user!.id;
+    const user = await User.findByPk(userId);
 
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
-    res.json({ user: user.toJSON() });
+    // Get total unread count across all channels
+    const memberships = await ChannelMember.findAll({
+      where: { userId },
+      attributes: ['channelId', 'lastReadAt'],
+    });
+
+    let totalUnread = 0;
+    for (const membership of memberships) {
+      const unreadCount = await Message.count({
+        where: {
+          channelId: membership.channelId,
+          isDeleted: false,
+          senderId: { [Op.ne]: userId },
+          ...(membership.lastReadAt && { createdAt: { [Op.gt]: membership.lastReadAt } }),
+        },
+      });
+      totalUnread += unreadCount;
+    }
+
+    res.json({ 
+      user: {
+        ...user.toJSON(),
+        unread: totalUnread,
+      }
+    });
   } catch (error) {
     console.error('Get current user error:', error);
     res.status(500).json({ error: 'Failed to fetch user' });

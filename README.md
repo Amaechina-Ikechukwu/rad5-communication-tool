@@ -5,8 +5,9 @@ A real-time communication platform API supporting messaging, channels, file shar
 ## Features
 
 - **Authentication**: Signup, login, password reset with JWT tokens
-- **User Management**: Profile updates, privacy settings, notification preferences
-- **Channels**: Create group chats, manage members, admin controls
+- **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory
+- **Channels**: Group chats, 1-on-1 personal messaging, admin controls, unread counts
+- **Organization**: Archive, star, and mute channels to manage your inbox
 - **Messaging**: Text messages, file attachments, audio messages, polls, reactions
 - **Real-time**: WebSocket support for live updates
 
@@ -60,19 +61,25 @@ http://localhost:3000/api-docs
 - `POST /api/auth/reset-password` - Reset password with token
 
 ### Users
-- `GET /api/users` - Get all users (paginated)
-- `GET /api/users/me` - Get current user
+- `GET /api/users` - Get all users (searchable by name/email)
+- `GET /api/users/me` - Get current user (includes total unread count)
 - `GET /api/users/:id` - Get user by ID
 - `PUT /api/users/profile` - Update profile
 - `PUT /api/users/privacy` - Update privacy settings
 - `PUT /api/users/notifications` - Update notification settings
 
 ### Channels
-- `GET /api/channels` - Get user's channels
+- `GET /api/channels` - Get user's channels (supports search and filters: starred, archived, muted, unread)
 - `POST /api/channels` - Create a new channel
 - `GET /api/channels/:id` - Get channel details
+- `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat
+- `GET /api/channels/personal/:recipientId/messages` - Get messages from a personal chat
 - `POST /api/channels/:id/members` - Add member (admin only)
 - `DELETE /api/channels/:id/members/:memberId` - Remove member (admin only)
+- `POST /api/channels/:id/archive` - Toggle channel archive status
+- `POST /api/channels/:id/star` - Toggle channel star status
+- `POST /api/channels/:id/mute` - Toggle channel mute status
+- `POST /api/channels/:id/read` - Mark channel as read
 
 ### Messages
 - `GET /api/channels/:channelId/messages` - Get channel messages

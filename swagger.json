@@ -757,6 +757,359 @@
         }
       }
     },
+    "/channels/{id}/archive": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle channel archive status",
+        "description": "Archive or unarchive a channel for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Channel ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel archived successfully"
+                    },
+                    "isArchived": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/star": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle channel star status",
+        "description": "Star or unstar a channel for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Channel ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel starred successfully"
+                    },
+                    "isStarred": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/mute": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle channel mute status",
+        "description": "Mute or unmute notifications for a channel",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Channel ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mute status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel muted successfully"
+                    },
+                    "isMuted": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/read": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Mark channel as read",
+        "description": "Mark all messages in the channel as read",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Channel ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Channel marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel marked as read"
+                    },
+                    "lastReadAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}": {
+      "get": {
+        "tags": ["Channels"],
+        "summary": "Get or create personal chat",
+        "description": "Get existing personal chat with a user or create a new one",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "Recipient user ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal chat retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Channel" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "isArchived": {
+                              "type": "boolean"
+                            },
+                            "isStarred": {
+                              "type": "boolean"
+                            },
+                            "isMuted": {
+                              "type": "boolean"
+                            },
+                            "unreadCount": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot create personal chat with yourself",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/messages": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Get personal chat messages",
+        "description": "Retrieve paginated messages from a personal chat",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "Recipient user ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Messages per page",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Get messages before this timestamp (ISO 8601)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channelId}/messages": {
       "get": {
         "tags": ["Messages"],
@@ -1314,6 +1667,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "unread": {
+            "type": "integer",
+            "description": "Total unread message count across all channels (only returned for current user)"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -1398,6 +1755,22 @@
             "type": "string",
             "enum": ["admin", "member"],
             "description": "Current user's role in the channel"
+          },
+          "isArchived": {
+            "type": "boolean",
+            "description": "Whether the channel is archived for the current user"
+          },
+          "isStarred": {
+            "type": "boolean",
+            "description": "Whether the channel is starred for the current user"
+          },
+          "isMuted": {
+            "type": "boolean",
+            "description": "Whether notifications are muted for the current user"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "description": "Number of unread messages in the channel"
           },
           "createdAt": {
             "type": "string",
