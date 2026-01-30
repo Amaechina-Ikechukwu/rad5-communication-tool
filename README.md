@@ -74,6 +74,7 @@ http://localhost:3000/api-docs
 - `GET /api/channels/:id` - Get channel details
 - `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat
 - `GET /api/channels/personal/:recipientId/messages` - Get messages from a personal chat
+- `POST /api/channels/personal/:recipientId/messages` - Send a direct message (creates chat if needed)
 - `POST /api/channels/:id/members` - Add member (admin only)
 - `DELETE /api/channels/:id/members/:memberId` - Remove member (admin only)
 - `POST /api/channels/:id/archive` - Toggle channel archive status

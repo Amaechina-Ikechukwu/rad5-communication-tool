@@ -10,7 +10,8 @@ import {
   muteChannel,
   markChannelAsRead,
   getPersonalChat,
-  getPersonalChatMessages
+  getPersonalChatMessages,
+  sendDirectMessage
 } from '../controllers/channelController';
 import { authenticate } from '../middleware/auth';
 
@@ -31,6 +32,9 @@ router.get('/personal/:recipientId', getPersonalChat);
 
 // GET /api/channels/personal/:recipientId/messages
 router.get('/personal/:recipientId/messages', getPersonalChatMessages);
+
+// POST /api/channels/personal/:recipientId/messages - Send a direct message
+router.post('/personal/:recipientId/messages', sendDirectMessage);
 
 // GET /api/channels/:id
 router.get('/:id', getChannelDetails);

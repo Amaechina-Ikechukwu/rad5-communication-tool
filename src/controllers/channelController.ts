@@ -537,6 +537,122 @@ export const getPersonalChat = async (req: AuthRequest, res: Response): Promise<
   }
 };
 
+// POST /api/channels/personal/:recipientId/messages - Send a direct message to a user
+export const sendDirectMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const { text } = req.body;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot send a message to yourself' });
+      return;
+    }
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      res.status(400).json({ error: 'Message text is required' });
+      return;
+    }
+
+    // Check if recipient exists
+    const recipient = await User.findByPk(recipientId);
+    if (!recipient) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    // Find existing personal chat (non-group channel) between these two users
+    const existingChannels = await Channel.findAll({
+      where: { isGroup: false },
+      include: [
+        {
+          model: User,
+          as: 'members',
+          attributes: ['id'],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    let personalChat = existingChannels.find((channel: any) => {
+      const memberIds = channel.members.map((m: any) => m.id);
+      return memberIds.length === 2 && 
+             memberIds.includes(userId) && 
+             memberIds.includes(recipientId);
+    });
+
+    if (!personalChat) {
+      // Create new personal chat
+      personalChat = await Channel.create({
+        name: `${req.user!.name} - ${recipient.name}`,
+        isGroup: false,
+        createdBy: userId,
+      });
+
+      // Add both users as members
+      await Promise.all([
+        ChannelMember.create({
+          channelId: personalChat.id,
+          userId,
+          role: 'member',
+        }),
+        ChannelMember.create({
+          channelId: personalChat.id,
+          userId: recipientId,
+          role: 'member',
+        }),
+      ]);
+    }
+
+    // Create the message
+    const message = await Message.create({
+      channelId: personalChat.id,
+      senderId: userId,
+      text: text.trim(),
+    });
+
+    // Fetch with sender info
+    const fullMessage = await Message.findByPk(message.id, {
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+      ],
+    });
+
+    // Update sender's lastReadAt
+    await ChannelMember.update(
+      { lastReadAt: new Date() },
+      { where: { channelId: personalChat.id, userId } }
+    );
+
+    const formattedMessage = {
+      id: fullMessage!.id,
+      sender: (fullMessage as any).sender,
+      text: fullMessage!.text,
+      time: fullMessage!.createdAt,
+      isOwn: true,
+      reactions: [],
+      channelId: personalChat.id,
+    };
+
+    res.status(201).json({
+      message: 'Direct message sent',
+      data: formattedMessage,
+      channel: {
+        id: personalChat.id,
+        name: personalChat.name,
+        isGroup: false,
+      },
+    });
+  } catch (error) {
+    console.error('Send direct message error:', error);
+    res.status(500).json({ error: 'Failed to send direct message' });
+  }
+};
+
 // GET /api/channels/personal/:userId/messages - Get messages from personal chat
 export const getPersonalChatMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
