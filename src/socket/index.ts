@@ -15,7 +15,7 @@ const userSockets: Map<string, string> = new Map(); // userId -> socketId
 export const initializeSocket = (server: HttpServer): Server => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || ['http://localhost:5173', '*'],
+      origin: [process.env.FRONTEND_URL, 'http://localhost:5173'].filter(Boolean) as string[],
       methods: ['GET', 'POST'],
     },
     path: '/ws',
