@@ -15,4 +15,4 @@ COPY . .
 EXPOSE 8080
 
 # Start the application
-CMD ["sh", "-c", "bun run db:push && bun run src/server/index.ts"]
+CMD ["sh", "-c", "bun run db:push && bun run src/index.ts"]

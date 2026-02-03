@@ -7,7 +7,7 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "test": "bun test",
-    "db:push": "drizzle-kit push"
+    "db:push": "bun src/scripts/db-push.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
