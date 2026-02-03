@@ -3,22 +3,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Direct TCP connection - works for both local and Cloud SQL with public IP
-const sequelize = new Sequelize({
-  dialect: 'postgres',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'rad5_comms',
-  username: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-  logging: process.env.NODE_ENV === 'development' ? console.log : false,
-  dialectOptions: {
-    ssl: process.env.DB_SSL === 'true' ? {
-      require: true,
-      rejectUnauthorized: false,
-    } : false,
-  },
-});
+// Database connection using connection string
+const sequelize = new Sequelize(
+  process.env.DATABASE_URL || 'postgresql://postgres@localhost:5432/rad5_comms',
+  {
+    dialect: 'postgres',
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+  }
+);
 
 export const connectDB = async (): Promise<void> => {
   try {
