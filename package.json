@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "db:push": "drizzle-kit push"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
