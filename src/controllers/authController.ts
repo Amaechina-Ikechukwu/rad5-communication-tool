@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { User } from '../models';
+import { User, Channel, ChannelMember } from '../models';
 import { generateToken } from '../middleware/auth';
 import { isValidEmail, isStrongPassword } from '../utils/validators';
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../utils/email';
@@ -43,6 +43,25 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
 
     // Generate token
     const token = generateToken({ id: user.id, email: user.email });
+
+    // Add user to "General" channel
+    /*
+    const [generalChannel] = await Channel.findOrCreate({
+      where: { name: 'General' },
+      defaults: {
+        name: 'General',
+        description: 'General discussion for all members',
+        isGroup: true,
+        createdBy: user.id, // The first user to signup creates it, or system
+      },
+    });
+
+    await ChannelMember.create({
+      channelId: generalChannel.id,
+      userId: user.id,
+      role: 'member',
+    });
+    */
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail(user.email, user.name).catch(console.error);

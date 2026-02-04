@@ -44,6 +44,20 @@ describe('Auth Endpoints', () => {
 
       authToken = data.token;
       userId = data.user.id;
+
+      /*
+      // Verify user is added to General channel
+      const channelsRes = await fetch(`${baseUrl}/channels`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const channelsData = await channelsRes.json() as any;
+      
+      expect(channelsRes.status).toBe(200);
+      expect(channelsData.channels).toBeDefined();
+      const generalChannel = channelsData.channels.find((c: any) => c.name === 'General');
+      expect(generalChannel).toBeDefined();
+      expect(generalChannel.isGroup).toBe(true);
+      */
     });
 
     it('should reject duplicate email', async () => {

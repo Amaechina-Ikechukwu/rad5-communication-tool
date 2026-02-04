@@ -30,6 +30,9 @@ router.post('/', createChannel);
 // GET /api/channels/personal/:recipientId
 router.get('/personal/:recipientId', getPersonalChat);
 
+// POST /api/channels/personal/:recipientId - Create or get personal chat
+router.post('/personal/:recipientId', getPersonalChat);
+
 // GET /api/channels/personal/:recipientId/messages
 router.get('/personal/:recipientId/messages', getPersonalChatMessages);
 

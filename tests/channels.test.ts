@@ -303,6 +303,23 @@ describe('Channel Endpoints', () => {
     });
   });
 
+  describe('POST /api/channels/personal/:recipientId', () => {
+    it('should create and return personal chat via POST', async () => {
+      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(data.channel).toBeDefined();
+      expect(data.channel.isGroup).toBe(false);
+      expect(data.channel.members).toBeDefined();
+      expect(data.channel.members.length).toBe(2);
+    });
+  });
+
   describe('GET /api/channels/personal/:recipientId/messages', () => {
     it('should return personal chat messages', async () => {
       // First ensure personal chat exists

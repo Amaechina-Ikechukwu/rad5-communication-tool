@@ -4,7 +4,7 @@ import { resolve } from 'path';
 // Set test environment first
 process.env.NODE_ENV = 'test';
 // Use a different port for tests to avoid conflicts
-process.env.PORT = '3333';
+process.env.PORT = '3334';
 
 // Manually load .env since dotenv may not find it properly in tests
 const envPath = resolve(__dirname, '../.env');
@@ -50,7 +50,7 @@ export const waitForServer = async () => {
   try {
     await startServer();
     serverReady = true;
-    console.log('✅ Test server started on port 3333');
+    console.log('✅ Test server started on port 3334');
     await new Promise(resolve => setTimeout(resolve, 500));
   } catch (error) {
     console.error('❌ Failed to start server:', error);
@@ -70,4 +70,4 @@ export const stopTestServer = async () => {
   }
 };
 
-export const baseUrl = 'http://localhost:3333/api';
+export const baseUrl = 'http://localhost:3334/api';

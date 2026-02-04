@@ -54,7 +54,7 @@
         },
         "responses": {
           "201": {
-            "description": "Account created successfully",
+            "description": "Account created successfully. User is automatically added to the 'General' channel.",
             "content": {
               "application/json": {
                 "schema": {
@@ -512,6 +512,25 @@
         "summary": "Get user's channels",
         "description": "Retrieve all channels the authenticated user is a member of",
         "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Search channels by name or description",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Filter channels",
+            "schema": {
+              "type": "string",
+              "enum": ["starred", "archived", "muted", "unread", "groups", "personal", "active"]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of channels",
@@ -622,6 +641,98 @@
           },
           "404": {
             "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}": {
+      "get": {
+        "tags": ["Channels"],
+        "summary": "Get personal chat with a user",
+        "description": "Get or create a personal chat (DM) with a specific user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal chat channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "$ref": "#/components/schemas/Channel"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Create personal chat with a user",
+        "description": "Explicitly create or get a personal chat (DM) with a specific user. Use this before fetching messages.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal chat channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "$ref": "#/components/schemas/Channel"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -965,82 +1076,7 @@
         }
       }
     },
-    "/channels/personal/{recipientId}": {
-      "get": {
-        "tags": ["Channels"],
-        "summary": "Get or create personal chat",
-        "description": "Get existing personal chat with a user or create a new one",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "Recipient user ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Personal chat retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "channel": {
-                      "allOf": [
-                        { "$ref": "#/components/schemas/Channel" },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "isArchived": {
-                              "type": "boolean"
-                            },
-                            "isStarred": {
-                              "type": "boolean"
-                            },
-                            "isMuted": {
-                              "type": "boolean"
-                            },
-                            "unreadCount": {
-                              "type": "integer"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Cannot create personal chat with yourself",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
+
     "/channels/personal/{recipientId}/messages": {
       "get": {
         "tags": ["Messages"],
@@ -1622,6 +1658,10 @@
                     "type": {
                       "type": "string",
                       "description": "File type"
+                    },
+                    "originalName": {
+                      "type": "string",
+                      "description": "Original filename"
                     }
                   }
                 }

@@ -4,7 +4,7 @@ A real-time communication platform API supporting messaging, channels, file shar
 
 ## Features
 
-- **Authentication**: Signup, login, password reset with JWT tokens
+- **Authentication**: Signup (automatic "General" channel join), login, password reset with JWT tokens
 - **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory
 - **Channels**: Group chats, 1-on-1 personal messaging, admin controls, unread counts
 - **Organization**: Archive, star, and mute channels to manage your inbox
@@ -55,7 +55,7 @@ http://localhost:3000/api-docs
 ## API Endpoints
 
 ### Auth
-- `POST /api/auth/signup` - Create a new account
+- `POST /api/auth/signup` - Create a new account (automatically joins "General" channel)
 - `POST /api/auth/login` - Login to existing account
 - `POST /api/auth/forgot-password` - Request password reset
 - `POST /api/auth/reset-password` - Reset password with token
@@ -69,10 +69,11 @@ http://localhost:3000/api-docs
 - `PUT /api/users/notifications` - Update notification settings
 
 ### Channels
-- `GET /api/channels` - Get user's channels (supports search and filters: starred, archived, muted, unread)
+- `GET /api/channels` - Get user's channels (supports search and filters: starred, archived, muted, unread, groups, personal, active)
 - `POST /api/channels` - Create a new channel
 - `GET /api/channels/:id` - Get channel details
 - `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat
+- `POST /api/channels/personal/:recipientId` - Create or get a 1-on-1 personal chat
 - `GET /api/channels/personal/:recipientId/messages` - Get messages from a personal chat
 - `POST /api/channels/personal/:recipientId/messages` - Send a direct message (creates chat if needed)
 - `POST /api/channels/:id/members` - Add member (admin only)
