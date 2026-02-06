@@ -7,7 +7,7 @@ A real-time communication platform API supporting messaging, channels, file shar
 - **Authentication**: Signup (automatic "General" channel join), login, password reset with JWT tokens
 - **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory
 - **Channels**: Group chats, 1-on-1 personal messaging, admin controls, unread counts
-- **Organization**: Archive, star, and mute channels to manage your inbox
+- **Organization**: Archive, star, and mute channels with toggle or explicit setting controls
 - **Messaging**: Text messages, file attachments, audio messages, polls, reactions
 - **Real-time**: WebSocket support for live updates
 
@@ -81,6 +81,7 @@ http://localhost:3000/api-docs
 - `POST /api/channels/:id/archive` - Toggle channel archive status
 - `POST /api/channels/:id/star` - Toggle channel star status
 - `POST /api/channels/:id/mute` - Toggle channel mute status
+- `PATCH /api/channels/:id/settings` - Update channel settings (archive, star, mute)
 - `POST /api/channels/:id/read` - Mark channel as read
 
 ### Messages

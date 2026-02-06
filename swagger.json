@@ -1024,6 +1024,105 @@
         }
       }
     },
+    "/channels/{id}/settings": {
+      "patch": {
+        "tags": ["Channels"],
+        "summary": "Update channel settings explicitly",
+        "description": "Explicitly set isArchived, isStarred, and/or isMuted for a channel. Use this to unarchive, unstar, or unmute without toggling.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Channel ID (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean",
+                    "description": "Set archive status (true = archived, false = unarchived)",
+                    "example": false
+                  },
+                  "isStarred": {
+                    "type": "boolean",
+                    "description": "Set star status (true = starred, false = unstarred)",
+                    "example": true
+                  },
+                  "isMuted": {
+                    "type": "boolean",
+                    "description": "Set mute status (true = muted, false = unmuted)",
+                    "example": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel settings updated successfully"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "isArchived": {
+                          "type": "boolean"
+                        },
+                        "isStarred": {
+                          "type": "boolean"
+                        },
+                        "isMuted": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No valid settings provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{id}/read": {
       "post": {
         "tags": ["Channels"],

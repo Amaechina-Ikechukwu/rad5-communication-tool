@@ -407,7 +407,55 @@ export const muteChannel = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-// POST /api/channels/:id/read
+// PATCH /api/channels/:id/settings - Update channel settings explicitly
+export const updateChannelSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isArchived, isStarred, isMuted } = req.body;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // Build update object with only provided fields
+    const updates: { isArchived?: boolean; isStarred?: boolean; isMuted?: boolean } = {};
+    
+    if (typeof isArchived === 'boolean') {
+      updates.isArchived = isArchived;
+    }
+    if (typeof isStarred === 'boolean') {
+      updates.isStarred = isStarred;
+    }
+    if (typeof isMuted === 'boolean') {
+      updates.isMuted = isMuted;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'No valid settings provided. Use isArchived, isStarred, or isMuted (boolean values).' });
+      return;
+    }
+
+    await membership.update(updates);
+
+    res.json({
+      message: 'Channel settings updated successfully',
+      settings: {
+        isArchived: membership.isArchived,
+        isStarred: membership.isStarred,
+        isMuted: membership.isMuted,
+      },
+    });
+  } catch (error) {
+    console.error('Update channel settings error:', error);
+    res.status(500).json({ error: 'Failed to update channel settings' });
+  }
+};
 export const markChannelAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

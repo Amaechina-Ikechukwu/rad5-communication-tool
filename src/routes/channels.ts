@@ -11,7 +11,8 @@ import {
   markChannelAsRead,
   getPersonalChat,
   getPersonalChatMessages,
-  sendDirectMessage
+  sendDirectMessage,
+  updateChannelSettings
 } from '../controllers/channelController';
 import { authenticate } from '../middleware/auth';
 
@@ -59,5 +60,8 @@ router.post('/:id/mute', muteChannel);
 
 // POST /api/channels/:id/read
 router.post('/:id/read', markChannelAsRead);
+
+// PATCH /api/channels/:id/settings - Update channel settings explicitly
+router.patch('/:id/settings', updateChannelSettings);
 
 export default router;
