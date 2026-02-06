@@ -45,14 +45,13 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     const token = generateToken({ id: user.id, email: user.email });
 
     // Add user to "General" channel
-    /*
     const [generalChannel] = await Channel.findOrCreate({
       where: { name: 'General' },
       defaults: {
         name: 'General',
         description: 'General discussion for all members',
         isGroup: true,
-        createdBy: user.id, // The first user to signup creates it, or system
+        createdBy: user.id,
       },
     });
 
@@ -61,7 +60,6 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       userId: user.id,
       role: 'member',
     });
-    */
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail(user.email, user.name).catch(console.error);
