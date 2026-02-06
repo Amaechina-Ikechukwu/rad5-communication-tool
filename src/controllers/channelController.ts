@@ -515,6 +515,13 @@ export const getPersonalChat = async (req: AuthRequest, res: Response): Promise<
 
     let personalChat = existingChannels.find((channel: any) => {
       const memberIds = channel.members.map((m: any) => m.id);
+      
+      // Self-chat: only 1 member (the user themselves)
+      if (userId === recipientId) {
+        return memberIds.length === 1 && memberIds.includes(userId);
+      }
+      
+      // DM chat: 2 different members
       return memberIds.length === 2 && 
              memberIds.includes(userId) && 
              memberIds.includes(recipientId);
@@ -522,25 +529,35 @@ export const getPersonalChat = async (req: AuthRequest, res: Response): Promise<
 
     if (!personalChat) {
       // Create new personal chat
+      const isSelfChat = userId === recipientId;
       personalChat = await Channel.create({
-        name: `${req.user!.name} - ${recipient.name}`,
+        name: isSelfChat ? `${req.user!.name} (You)` : `${req.user!.name} - ${recipient.name}`,
         isGroup: false,
         createdBy: userId,
       });
 
-      // Add both users as members
-      await Promise.all([
-        ChannelMember.create({
+      if (isSelfChat) {
+        // Self-chat: only add the user once
+        await ChannelMember.create({
           channelId: personalChat.id,
           userId,
           role: 'member',
-        }),
-        ChannelMember.create({
-          channelId: personalChat.id,
-          userId: recipientId,
-          role: 'member',
-        }),
-      ]);
+        });
+      } else {
+        // DM chat: add both users as members
+        await Promise.all([
+          ChannelMember.create({
+            channelId: personalChat.id,
+            userId,
+            role: 'member',
+          }),
+          ChannelMember.create({
+            channelId: personalChat.id,
+            userId: recipientId,
+            role: 'member',
+          }),
+        ]);
+      }
     }
 
     // Fetch channel with members and membership details
@@ -724,6 +741,13 @@ export const getPersonalChatMessages = async (req: AuthRequest, res: Response): 
 
     const personalChat = existingChannels.find((channel: any) => {
       const memberIds = channel.members.map((m: any) => m.id);
+      
+      // Self-chat: only 1 member (the user themselves)
+      if (userId === recipientId) {
+        return memberIds.length === 1 && memberIds.includes(userId);
+      }
+      
+      // DM chat: 2 different members
       return memberIds.length === 2 && 
              memberIds.includes(userId) && 
              memberIds.includes(recipientId);

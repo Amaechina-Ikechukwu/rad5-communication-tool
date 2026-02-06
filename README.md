@@ -6,7 +6,7 @@ A real-time communication platform API supporting messaging, channels, file shar
 
 - **Authentication**: Signup (automatic "General" channel join), login, password reset with JWT tokens
 - **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory
-- **Channels**: Group chats, 1-on-1 personal messaging, admin controls, unread counts
+- **Channels**: Group chats, 1-on-1 personal messaging (including self-messaging), admin controls, unread counts
 - **Organization**: Archive, star, and mute channels with toggle or explicit setting controls
 - **Messaging**: Text messages, file attachments, audio messages, polls, reactions
 - **Real-time**: WebSocket support for live updates
@@ -72,7 +72,7 @@ http://localhost:3000/api-docs
 - `GET /api/channels` - Get user's channels (supports search and filters: starred, archived, muted, unread, groups, personal, active)
 - `POST /api/channels` - Create a new channel
 - `GET /api/channels/:id` - Get channel details
-- `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat
+- `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat (supports self-chat)
 - `POST /api/channels/personal/:recipientId` - Create or get a 1-on-1 personal chat
 - `GET /api/channels/personal/:recipientId/messages` - Get messages from a personal chat
 - `POST /api/channels/personal/:recipientId/messages` - Send a direct message (creates chat if needed)
@@ -88,7 +88,7 @@ http://localhost:3000/api-docs
 - `GET /api/channels/:channelId/messages` - Get channel messages
 - `POST /api/channels/:channelId/messages` - Send a message
 - `PUT /api/messages/:id` - Edit message (within 20 min)
-- `DELETE /api/messages/:id` - Delete message (within 20 min)
+- `DELETE /api/messages/:id` - Delete message
 - `POST /api/messages/:id/reactions` - Add/toggle reaction
 - `POST /api/upload` - Upload a file
 

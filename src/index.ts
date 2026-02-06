@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import swaggerUi from 'swagger-ui-express';
 import { connectDB } from './config/db';
 import { initializeSocket } from './socket';
+import { initializeGeneralChannel } from './utils/initializeGeneralChannel';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -64,6 +65,7 @@ const io = initializeSocket(server);
 // Start server function (exported for tests)
 const startServer = async (): Promise<void> => {
   await connectDB();
+  await initializeGeneralChannel(); // Ensure General channel exists on startup
   return new Promise((resolve) => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);

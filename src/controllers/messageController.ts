@@ -247,11 +247,6 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    if (!isWithinEditWindow(message.createdAt)) {
-      res.status(400).json({ error: 'Cannot delete message after 20 minutes' });
-      return;
-    }
-
     await message.update({ isDeleted: true, text: null, attachments: [], audio: null });
 
     res.json({ message: 'Message deleted' });
