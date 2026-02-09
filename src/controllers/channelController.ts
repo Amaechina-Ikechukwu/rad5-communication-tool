@@ -88,6 +88,9 @@ export const getChannels = async (req: AuthRequest, res: Response): Promise<void
           // Exclude archived channels
           channelsWithDetails = channelsWithDetails.filter(c => !c.isArchived);
           break;
+        case 'all':
+          // Return all channels including archived
+          break;
       }
     } else {
       // By default, exclude archived channels unless specifically filtered

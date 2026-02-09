@@ -28,19 +28,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
       attributes: ['id', 'name', 'email', 'avatar', 'bio', 'lastSeen', 'profileVisibility', 'isOnline', 'lastActive'],
       limit: Number(limit),
       offset,
-      order: [
-        // Order by relevance: exact matches first, then partial matches
-        ...(search ? [
-          [fn('CASE', 
-            sequelizeWhere(fn('LOWER', col('name')), search.toString().toLowerCase()), 
-            0,
-            sequelizeWhere(fn('LOWER', col('name')), { [Op.like]: `${search.toString().toLowerCase()}%` }),
-            1,
-            2
-          ), 'ASC']
-        ] as any : []),
-        ['name', 'ASC'],
-      ],
+      order: [['name', 'ASC']],
     });
 
     res.json({
