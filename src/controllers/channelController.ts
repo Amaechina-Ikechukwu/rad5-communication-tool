@@ -341,10 +341,11 @@ export const archiveChannel = async (req: AuthRequest, res: Response): Promise<v
     // Toggle archive status
     const newStatus = !membership.isArchived;
     await membership.update({ isArchived: newStatus });
+    await membership.reload();
 
     res.json({ 
       message: newStatus ? 'Channel archived successfully' : 'Channel unarchived successfully',
-      isArchived: newStatus
+      isArchived: membership.isArchived
     });
   } catch (error) {
     console.error('Archive channel error:', error);
@@ -370,10 +371,11 @@ export const starChannel = async (req: AuthRequest, res: Response): Promise<void
     // Toggle star status
     const newStatus = !membership.isStarred;
     await membership.update({ isStarred: newStatus });
+    await membership.reload();
 
     res.json({ 
       message: newStatus ? 'Channel starred successfully' : 'Channel unstarred successfully',
-      isStarred: newStatus
+      isStarred: membership.isStarred
     });
   } catch (error) {
     console.error('Star channel error:', error);
@@ -399,10 +401,11 @@ export const muteChannel = async (req: AuthRequest, res: Response): Promise<void
     // Toggle mute status
     const newStatus = !membership.isMuted;
     await membership.update({ isMuted: newStatus });
+    await membership.reload();
 
     res.json({ 
       message: newStatus ? 'Channel muted successfully' : 'Channel unmuted successfully',
-      isMuted: newStatus
+      isMuted: membership.isMuted
     });
   } catch (error) {
     console.error('Mute channel error:', error);
@@ -805,4 +808,213 @@ export const getPersonalChatMessages = async (req: AuthRequest, res: Response): 
     console.error('Get personal chat messages error:', error);
     res.status(500).json({ error: 'Failed to fetch personal chat messages' });
   }
+};
+
+// POST /api/channels/personal/:recipientId/archive
+export const archivePersonalChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot archive chat with yourself' });
+      return;
+    }
+
+    // Find personal chat
+    const personalChat = await findPersonalChat(userId, recipientId);
+
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: personalChat.id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this chat' });
+      return;
+    }
+
+    // Toggle archive status
+    const newStatus = !membership.isArchived;
+    await membership.update({ isArchived: newStatus });
+    await membership.reload();
+
+    res.json({ 
+      message: newStatus ? 'Chat archived successfully' : 'Chat unarchived successfully',
+      isArchived: membership.isArchived
+    });
+  } catch (error) {
+    console.error('Archive personal chat error:', error);
+    res.status(500).json({ error: 'Failed to archive personal chat' });
+  }
+};
+
+// POST /api/channels/personal/:recipientId/star
+export const starPersonalChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot star chat with yourself' });
+      return;
+    }
+
+    // Find personal chat
+    const personalChat = await findPersonalChat(userId, recipientId);
+
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: personalChat.id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this chat' });
+      return;
+    }
+
+    // Toggle star status
+    const newStatus = !membership.isStarred;
+    await membership.update({ isStarred: newStatus });
+    await membership.reload();
+
+    res.json({ 
+      message: newStatus ? 'Chat starred successfully' : 'Chat unstarred successfully',
+      isStarred: membership.isStarred
+    });
+  } catch (error) {
+    console.error('Star personal chat error:', error);
+    res.status(500).json({ error: 'Failed to star personal chat' });
+  }
+};
+
+// POST /api/channels/personal/:recipientId/mute
+export const mutePersonalChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot mute chat with yourself' });
+      return;
+    }
+
+    // Find personal chat
+    const personalChat = await findPersonalChat(userId, recipientId);
+
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: personalChat.id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this chat' });
+      return;
+    }
+
+    // Toggle mute status
+    const newStatus = !membership.isMuted;
+    await membership.update({ isMuted: newStatus });
+    await membership.reload();
+
+    res.json({ 
+      message: newStatus ? 'Chat muted successfully' : 'Chat unmuted successfully',
+      isMuted: membership.isMuted
+    });
+  } catch (error) {
+    console.error('Mute personal chat error:', error);
+    res.status(500).json({ error: 'Failed to mute personal chat' });
+  }
+};
+
+// PATCH /api/channels/personal/:recipientId/settings
+export const updatePersonalChatSettings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const { isArchived, isStarred, isMuted } = req.body;
+    const userId = req.user!.id;
+
+    if (recipientId === userId) {
+      res.status(400).json({ error: 'Cannot update settings for chat with yourself' });
+      return;
+    }
+
+    // Find personal chat
+    const personalChat = await findPersonalChat(userId, recipientId);
+
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId: personalChat.id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this chat' });
+      return;
+    }
+
+    // Build update object
+    const updates: { isArchived?: boolean; isStarred?: boolean; isMuted?: boolean } = {};
+    
+    if (typeof isArchived === 'boolean') updates.isArchived = isArchived;
+    if (typeof isStarred === 'boolean') updates.isStarred = isStarred;
+    if (typeof isMuted === 'boolean') updates.isMuted = isMuted;
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'No valid settings provided' });
+      return;
+    }
+
+    await membership.update(updates);
+    await membership.reload();
+
+    res.json({
+      message: 'Chat settings updated successfully',
+      settings: {
+        isArchived: membership.isArchived,
+        isStarred: membership.isStarred,
+        isMuted: membership.isMuted,
+      },
+    });
+  } catch (error) {
+    console.error('Update personal chat settings error:', error);
+    res.status(500).json({ error: 'Failed to update personal chat settings' });
+  }
+};
+
+// Helper function to find personal chat
+const findPersonalChat = async (userId: string, recipientId: string) => {
+  const existingChannels = await Channel.findAll({
+    where: { isGroup: false },
+    include: [
+      {
+        model: User,
+        as: 'members',
+        attributes: ['id'],
+        through: { attributes: [] },
+      },
+    ],
+  });
+
+  return existingChannels.find((channel: any) => {
+    const memberIds = channel.members.map((m: any) => m.id);
+    return memberIds.length === 2 && 
+           memberIds.includes(userId) && 
+           memberIds.includes(recipientId);
+  });
 };

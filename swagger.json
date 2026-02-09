@@ -744,6 +744,239 @@
         }
       }
     },
+    "/channels/personal/{recipientId}/archive": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle personal chat archive status",
+        "description": "Archive or unarchive a personal chat for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat archived successfully"
+                    },
+                    "isArchived": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/star": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle personal chat star status",
+        "description": "Star or unstar a personal chat for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat starred successfully"
+                    },
+                    "isStarred": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/mute": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle personal chat mute status",
+        "description": "Mute or unmute a personal chat for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mute status toggled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat muted successfully"
+                    },
+                    "isMuted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/settings": {
+      "patch": {
+        "tags": ["Channels"],
+        "summary": "Update personal chat settings",
+        "description": "Explicitly set isArchived, isStarred, and/or isMuted for a personal chat",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "recipientId",
+            "in": "path",
+            "required": true,
+            "description": "User ID of the recipient (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean",
+                    "description": "Set archive status"
+                  },
+                  "isStarred": {
+                    "type": "boolean",
+                    "description": "Set star status"
+                  },
+                  "isMuted": {
+                    "type": "boolean",
+                    "description": "Set mute status"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat settings updated successfully"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "isArchived": { "type": "boolean" },
+                        "isStarred": { "type": "boolean" },
+                        "isMuted": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{id}/members": {
       "post": {
         "tags": ["Channels"],

@@ -12,7 +12,11 @@ import {
   getPersonalChat,
   getPersonalChatMessages,
   sendDirectMessage,
-  updateChannelSettings
+  updateChannelSettings,
+  archivePersonalChat,
+  starPersonalChat,
+  mutePersonalChat,
+  updatePersonalChatSettings
 } from '../controllers/channelController';
 import { authenticate } from '../middleware/auth';
 
@@ -39,6 +43,12 @@ router.get('/personal/:recipientId/messages', getPersonalChatMessages);
 
 // POST /api/channels/personal/:recipientId/messages - Send a direct message
 router.post('/personal/:recipientId/messages', sendDirectMessage);
+
+// Personal chat settings
+router.post('/personal/:recipientId/archive', archivePersonalChat);
+router.post('/personal/:recipientId/star', starPersonalChat);
+router.post('/personal/:recipientId/mute', mutePersonalChat);
+router.patch('/personal/:recipientId/settings', updatePersonalChatSettings);
 
 // GET /api/channels/:id
 router.get('/:id', getChannelDetails);
