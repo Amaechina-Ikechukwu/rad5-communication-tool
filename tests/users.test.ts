@@ -40,6 +40,17 @@ describe('User Endpoints', () => {
       expect(data.users).toBeDefined();
       expect(Array.isArray(data.users)).toBe(true);
       expect(data.pagination).toBeDefined();
+      expect(data.pagination.hasMore).toBeDefined();
+
+      if (data.users.length > 0) {
+        const user = data.users[0];
+        expect(user.readReceipts).toBeDefined();
+        expect(user.typingIndicators).toBeDefined();
+        expect(user.notificationSettings).toBeDefined();
+        expect(user.createdAt).toBeDefined();
+        expect(user.updatedAt).toBeDefined();
+        expect(user.unread).toBeDefined();
+      }
     });
 
     it('should reject unauthenticated request', async () => {

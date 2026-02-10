@@ -5,7 +5,7 @@ A real-time communication platform API supporting messaging, channels, file shar
 ## Features
 
 - **Authentication**: Signup (automatic "General" channel join), login, password reset with JWT tokens
-- **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory
+- **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory with unread counts and DM status tracking
 - **Channels**: Group chats, 1-on-1 personal messaging (including self-messaging), admin controls, unread counts
 - **Organization**: Archive, star, and mute channels with toggle or explicit setting controls
 - **Messaging**: Text messages, file attachments, audio messages, polls, reactions
@@ -61,7 +61,7 @@ http://localhost:3000/api-docs
 - `POST /api/auth/reset-password` - Reset password with token
 
 ### Users
-- `GET /api/users` - Get all users (searchable by name/email)
+- `GET /api/users` - Get all users (searchable by name/email; includes unread counts and DM status indicators)
 - `GET /api/users/me` - Get current user (includes total unread count)
 - `GET /api/users/:id` - Get user by ID
 - `PUT /api/users/profile` - Update profile

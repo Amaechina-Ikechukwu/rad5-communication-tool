@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
+    name: string;
   };
 }
 
@@ -34,7 +35,7 @@ export const authenticate = async (
       return;
     }
 
-    req.user = { id: decoded.id, email: decoded.email };
+    req.user = { id: decoded.id, email: decoded.email, name: user.name };
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid or expired token.' });

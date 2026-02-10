@@ -45,7 +45,6 @@ describe('Auth Endpoints', () => {
       authToken = data.token;
       userId = data.user.id;
 
-      /*
       // Verify user is added to General channel
       const channelsRes = await fetch(`${baseUrl}/channels`, {
         headers: { Authorization: `Bearer ${authToken}` },
@@ -57,7 +56,12 @@ describe('Auth Endpoints', () => {
       const generalChannel = channelsData.channels.find((c: any) => c.name === 'General');
       expect(generalChannel).toBeDefined();
       expect(generalChannel.isGroup).toBe(true);
-      */
+      
+      // Verify no personal channel created automatically (Bug 1 fix)
+      // The bug created a channel named "undefined - [Name]" on signup (or immediately accessed)
+      // Here we check that ONLY the General channel exists or at least no personal channels
+      const personalChannels = channelsData.channels.filter((c: any) => !c.isGroup);
+      expect(personalChannels.length).toBe(0);
     });
 
     it('should reject duplicate email', async () => {

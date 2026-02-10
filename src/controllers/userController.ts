@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
-import { User, ChannelMember, Message } from '../models';
+import { User, ChannelMember, Message, Channel } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary } from '../utils/cloudinary';
 
@@ -9,6 +9,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
   try {
     const { search, page = 1, limit = 20 } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    const currentUserId = req.user!.id;
 
     const whereClause: any = {};
     
@@ -25,19 +26,88 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
 
     const { count, rows: users } = await User.findAndCountAll({
       where: whereClause,
-      attributes: ['id', 'name', 'email', 'avatar', 'bio', 'lastSeen', 'profileVisibility', 'isOnline', 'lastActive'],
+      attributes: [
+        'id', 'name', 'email', 'avatar', 'bio', 
+        'lastSeen', 'profileVisibility', 'isOnline', 'lastActive',
+        'readReceipts', 'typingIndicators', 'notificationSettings',
+        'createdAt', 'updatedAt'
+      ],
       limit: Number(limit),
       offset,
       order: [['name', 'ASC']],
     });
 
+    // Get all DM channels for current user to compute unread/status
+    const personalChannels = await ChannelMember.findAll({
+      where: { userId: currentUserId },
+      include: [{
+        model: Channel,
+        as: 'channel',
+        where: { isGroup: false },
+        include: [{
+          model: User,
+          as: 'members',
+          attributes: ['id'],
+          through: { attributes: [] }
+        }]
+      }]
+    });
+
+    // Map otherUserId -> channel info
+    const dmMap = new Map<string, any>();
+    personalChannels.forEach((m: any) => {
+      const otherMember = m.channel.members.find((mem: any) => mem.id !== currentUserId);
+      if (otherMember) {
+        dmMap.set(otherMember.id, {
+          channelId: m.channelId,
+          lastReadAt: m.lastReadAt,
+          isArchived: m.isArchived,
+          isStarred: m.isStarred,
+          isMuted: m.isMuted
+        });
+      }
+    });
+
+    // Compute extra fields for each user
+    const usersWithDetails = await Promise.all(users.map(async (user) => {
+      const dmInfo = dmMap.get(user.id);
+      let unread = 0;
+      let isArchived = false;
+      let isStarred = false;
+      let isMuted = false;
+
+      if (dmInfo) {
+        isArchived = dmInfo.isArchived;
+        isStarred = dmInfo.isStarred;
+        isMuted = dmInfo.isMuted;
+        
+        unread = await Message.count({
+          where: {
+            channelId: dmInfo.channelId,
+            isDeleted: false,
+            senderId: user.id, // Messages FROM this user
+            ...(dmInfo.lastReadAt && { createdAt: { [Op.gt]: dmInfo.lastReadAt } }),
+          },
+        });
+      }
+
+      return {
+        ...user.toJSON(),
+        unread,
+        isArchived,
+        isStarred,
+        isMuted
+      };
+    }));
+
     res.json({
-      users,
+      users: usersWithDetails,
       pagination: {
         total: count,
         page: Number(page),
         limit: Number(limit),
         totalPages: Math.ceil(count / Number(limit)),
+        hasMore: offset + users.length < count,
       },
     });
   } catch (error) {
