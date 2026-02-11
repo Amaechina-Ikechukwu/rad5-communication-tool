@@ -108,7 +108,7 @@ bun test
 
 - **Runtime**: Bun
 - **Framework**: Express.js
-- **Database**: PostgreSQL with Sequelize ORM (Google Cloud SQL support)
+- **Database**: PostgreSQL with Sequelize ORM
 - **Authentication**: JWT
 - **File Storage**: Cloudinary
 - **Real-time**: Socket.io
