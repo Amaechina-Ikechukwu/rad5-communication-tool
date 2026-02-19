@@ -16,7 +16,11 @@ import {
   archivePersonalChat,
   starPersonalChat,
   mutePersonalChat,
-  updatePersonalChatSettings
+  updatePersonalChatSettings,
+  leaveChannel,
+  deleteChannel,
+  clearChannelMessages,
+  clearPersonalChatMessages
 } from '../controllers/channelController';
 import { authenticate } from '../middleware/auth';
 
@@ -50,6 +54,9 @@ router.post('/personal/:recipientId/star', starPersonalChat);
 router.post('/personal/:recipientId/mute', mutePersonalChat);
 router.patch('/personal/:recipientId/settings', updatePersonalChatSettings);
 
+// DELETE /api/channels/personal/:recipientId/messages - Clear personal chat messages
+router.delete('/personal/:recipientId/messages', clearPersonalChatMessages);
+
 // GET /api/channels/:id
 router.get('/:id', getChannelDetails);
 
@@ -58,6 +65,9 @@ router.post('/:id/members', addMember);
 
 // DELETE /api/channels/:id/members/:memberId
 router.delete('/:id/members/:memberId', removeMember);
+
+// POST /api/channels/:id/leave
+router.post('/:id/leave', leaveChannel);
 
 // POST /api/channels/:id/archive
 router.post('/:id/archive', archiveChannel);
@@ -73,5 +83,11 @@ router.post('/:id/read', markChannelAsRead);
 
 // PATCH /api/channels/:id/settings - Update channel settings explicitly
 router.patch('/:id/settings', updateChannelSettings);
+
+// DELETE /api/channels/:id/messages - Clear channel messages
+router.delete('/:id/messages', clearChannelMessages);
+
+// DELETE /api/channels/:id - Delete a group channel
+router.delete('/:id', deleteChannel);
 
 export default router;

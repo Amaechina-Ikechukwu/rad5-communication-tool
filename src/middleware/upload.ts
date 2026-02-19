@@ -12,7 +12,8 @@ const fileFilter = (
   cb: multer.FileFilterCallback
 ) => {
   const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm'];
+  const allowedAudioTypes = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac'];
+  const allowedVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo'];
   const allowedDocTypes = [
     'application/pdf',
     'application/zip',
@@ -23,7 +24,7 @@ const fileFilter = (
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   ];
 
-  const allAllowed = [...allowedImageTypes, ...allowedAudioTypes, ...allowedDocTypes];
+  const allAllowed = [...allowedImageTypes, ...allowedAudioTypes, ...allowedVideoTypes, ...allowedDocTypes];
 
   if (allAllowed.includes(file.mimetype)) {
     cb(null, true);

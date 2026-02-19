@@ -71,3 +71,42 @@ export const sendWelcomeEmail = async (
 
   await transporter.sendMail(mailOptions);
 };
+
+export const sendOtpEmail = async (
+  email: string,
+  name: string,
+  otp: string
+): Promise<void> => {
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@rad5comms.com',
+    to: email,
+    subject: 'Your Password Reset Code - Rad5 Comms',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Code</h2>
+        <p>Hi ${name},</p>
+        <p>You requested to reset your password. Use the code below to proceed:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <div style="background-color: #f4f4f4; border: 2px dashed #007bff; 
+                      padding: 20px; border-radius: 8px; display: inline-block;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #007bff;">
+              ${otp}
+            </span>
+          </div>
+        </div>
+        <p style="color: #666; font-size: 14px;">
+          This code will expire in <strong>15 minutes</strong>.
+        </p>
+        <p style="color: #666; font-size: 14px;">
+          If you didn't request this, please ignore this email. Your account is safe.
+        </p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px;">
+          This email was sent from Rad5 Comms. Please do not reply to this email.
+        </p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};

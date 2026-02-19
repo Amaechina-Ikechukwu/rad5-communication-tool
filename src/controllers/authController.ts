@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { User, Channel, ChannelMember } from '../models';
+import { User } from '../models';
 import { generateToken } from '../middleware/auth';
 import { isValidEmail, isStrongPassword } from '../utils/validators';
-import { sendPasswordResetEmail, sendWelcomeEmail } from '../utils/email';
+import { sendPasswordResetEmail, sendWelcomeEmail, sendOtpEmail } from '../utils/email';
 
 // POST /api/auth/signup
 export const signup = async (req: Request, res: Response): Promise<void> => {
@@ -43,23 +43,6 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
 
     // Generate token
     const token = generateToken({ id: user.id, email: user.email });
-
-    // Add user to "General" channel
-    const [generalChannel] = await Channel.findOrCreate({
-      where: { name: 'General' },
-      defaults: {
-        name: 'General',
-        description: 'General discussion for all members',
-        isGroup: true,
-        createdBy: user.id,
-      },
-    });
-
-    await ChannelMember.create({
-      channelId: generalChannel.id,
-      userId: user.id,
-      role: 'member',
-    });
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail(user.email, user.name).catch(console.error);
@@ -134,16 +117,23 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await user.update({
-      resetToken,
+      resetToken: otp,
       resetTokenExpiry,
     });
 
-    // Send reset email (non-blocking, log errors)
+    // Send OTP email
+    sendOtpEmail(user.email, user.name, otp).catch((err) => {
+      console.error('Failed to send OTP email:', err);
+    });
+
+    // Also send link-based reset as fallback
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    // Store the link token as well — we use otp for primary reset
     sendPasswordResetEmail(user.email, resetToken).catch((err) => {
       console.error('Failed to send password reset email:', err);
     });
@@ -152,6 +142,42 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ error: 'Failed to process request' });
+  }
+};
+
+// POST /api/auth/verify-otp
+export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      res.status(400).json({ error: 'Email and OTP are required' });
+      return;
+    }
+
+    const user = await User.findOne({
+      where: { email: email.toLowerCase(), resetToken: otp },
+    });
+
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+      res.status(400).json({ error: 'Invalid or expired OTP' });
+      return;
+    }
+
+    // Generate a temporary token to allow password reset
+    const tempToken = crypto.randomBytes(32).toString('hex');
+    await user.update({
+      resetToken: tempToken,
+      resetTokenExpiry: new Date(Date.now() + 15 * 60 * 1000), // another 15 min
+    });
+
+    res.json({
+      message: 'OTP verified successfully',
+      resetToken: tempToken,
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ error: 'Failed to verify OTP' });
   }
 };
 
@@ -194,5 +220,78 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ error: 'Failed to reset password' });
+  }
+};
+
+// POST /api/auth/change-password (authenticated)
+export const changePassword = async (req: Request & { user?: any }, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: 'Current password and new password are required' });
+      return;
+    }
+
+    const passwordCheck = isStrongPassword(newPassword);
+    if (!passwordCheck.valid) {
+      res.status(400).json({ error: passwordCheck.message });
+      return;
+    }
+
+    const user = await User.findByPk(req.user!.id);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      res.status(401).json({ error: 'Current password is incorrect' });
+      return;
+    }
+
+    await user.update({ password: newPassword });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+};
+
+// POST /api/auth/resend-otp
+export const resendOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ error: 'Email is required' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email: email.toLowerCase() } });
+    
+    if (!user) {
+      res.json({ message: 'If an account exists, a new OTP has been sent' });
+      return;
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    await user.update({
+      resetToken: otp,
+      resetTokenExpiry,
+    });
+
+    sendOtpEmail(user.email, user.name, otp).catch((err) => {
+      console.error('Failed to send OTP email:', err);
+    });
+
+    res.json({ message: 'If an account exists, a new OTP has been sent' });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ error: 'Failed to resend OTP' });
   }
 };

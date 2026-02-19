@@ -266,11 +266,25 @@ export const updateNotificationSettings = async (req: AuthRequest, res: Response
       return;
     }
 
-    const currentSettings = user.notificationSettings || { messages: true, groups: true, sounds: true };
+    const currentSettings = user.notificationSettings || {
+      messages: true, groups: true, sounds: true,
+      audio: true, images: true, videos: true,
+      files: true, reactions: true, mentions: true, calls: true,
+    };
+
+    const { audio, images, videos, files, reactions, mentions, calls } = req.body;
+
     const newSettings = {
       messages: typeof messages === 'boolean' ? messages : currentSettings.messages,
       groups: typeof groups === 'boolean' ? groups : currentSettings.groups,
       sounds: typeof sounds === 'boolean' ? sounds : currentSettings.sounds,
+      audio: typeof audio === 'boolean' ? audio : currentSettings.audio,
+      images: typeof images === 'boolean' ? images : currentSettings.images,
+      videos: typeof videos === 'boolean' ? videos : currentSettings.videos,
+      files: typeof files === 'boolean' ? files : currentSettings.files,
+      reactions: typeof reactions === 'boolean' ? reactions : currentSettings.reactions,
+      mentions: typeof mentions === 'boolean' ? mentions : currentSettings.mentions,
+      calls: typeof calls === 'boolean' ? calls : currentSettings.calls,
     };
 
     await user.update({ notificationSettings: newSettings });
@@ -282,5 +296,78 @@ export const updateNotificationSettings = async (req: AuthRequest, res: Response
   } catch (error) {
     console.error('Update notification settings error:', error);
     res.status(500).json({ error: 'Failed to update notification settings' });
+  }
+};
+
+// GET /api/users/:id/avatar - Get a user's profile image
+export const getUserAvatar = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = id as string;
+
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'name', 'avatar'],
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar,
+    });
+  } catch (error) {
+    console.error('Get user avatar error:', error);
+    res.status(500).json({ error: 'Failed to fetch user avatar' });
+  }
+};
+
+// PUT /api/users/avatar - Upload/update avatar only
+export const updateAvatar = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const file = req.file;
+
+    const user = await User.findByPk(req.user!.id);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    if (!file) {
+      res.status(400).json({ error: 'Image file is required' });
+      return;
+    }
+
+    const result = await uploadToCloudinary(file.buffer, 'avatars', 'image');
+    await user.update({ avatar: result.url });
+
+    res.json({
+      message: 'Avatar updated successfully',
+      avatar: result.url,
+    });
+  } catch (error) {
+    console.error('Update avatar error:', error);
+    res.status(500).json({ error: 'Failed to update avatar' });
+  }
+};
+
+// DELETE /api/users/avatar - Remove avatar
+export const deleteAvatar = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findByPk(req.user!.id);
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    await user.update({ avatar: null });
+
+    res.json({ message: 'Avatar removed successfully' });
+  } catch (error) {
+    console.error('Delete avatar error:', error);
+    res.status(500).json({ error: 'Failed to remove avatar' });
   }
 };

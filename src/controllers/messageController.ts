@@ -67,6 +67,9 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       attachments: msg.attachments,
       audio: msg.audio,
       poll: msg.poll,
+      status: msg.status,
+      deliveredAt: msg.deliveredAt,
+      readAt: msg.readAt,
     }));
 
     res.json({
@@ -170,6 +173,9 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       attachments: fullMessage!.attachments,
       audio: fullMessage!.audio,
       poll: fullMessage!.poll,
+      status: fullMessage!.status,
+      deliveredAt: fullMessage!.deliveredAt,
+      readAt: fullMessage!.readAt,
     };
 
     res.status(201).json({
@@ -324,5 +330,135 @@ export const uploadFile = async (req: AuthRequest, res: Response): Promise<void>
   } catch (error) {
     console.error('Upload file error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
+  }
+};
+
+// POST /api/messages/:id/poll/vote - Vote on a poll
+export const votePoll = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const messageId = id as string;
+    const { option } = req.body;
+    const userId = req.user!.id;
+
+    if (!option || typeof option !== 'string') {
+      res.status(400).json({ error: 'Poll option is required' });
+      return;
+    }
+
+    const message = await Message.findByPk(messageId);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    if (!message.poll) {
+      res.status(400).json({ error: 'This message does not have a poll' });
+      return;
+    }
+
+    // Verify membership
+    const membership = await ChannelMember.findOne({
+      where: { channelId: message.channelId, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    if (!message.poll.options.includes(option)) {
+      res.status(400).json({ error: 'Invalid poll option' });
+      return;
+    }
+
+    const votes = { ...message.poll.votes };
+
+    // Remove previous vote from all options
+    for (const opt of Object.keys(votes)) {
+      votes[opt] = (votes[opt] || []).filter((uid: string) => uid !== userId);
+    }
+
+    // Add vote to the chosen option
+    if (!votes[option]) {
+      votes[option] = [];
+    }
+    votes[option].push(userId);
+
+    await message.update({
+      poll: {
+        options: message.poll.options,
+        votes,
+      },
+    });
+
+    res.json({
+      message: 'Vote recorded',
+      poll: message.poll,
+    });
+  } catch (error) {
+    console.error('Vote poll error:', error);
+    res.status(500).json({ error: 'Failed to vote on poll' });
+  }
+};
+
+// PATCH /api/messages/:id/status - Update message delivery/read status
+export const updateMessageStatus = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const messageId = id as string;
+    const { status } = req.body;
+    const userId = req.user!.id;
+
+    if (!status || !['delivered', 'read'].includes(status)) {
+      res.status(400).json({ error: 'Status must be "delivered" or "read"' });
+      return;
+    }
+
+    const message = await Message.findByPk(messageId);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
+
+    // Only the recipient can update the status (not the sender)
+    if (message.senderId === userId) {
+      res.status(400).json({ error: 'Cannot update status of your own message' });
+      return;
+    }
+
+    // Verify membership
+    const membership = await ChannelMember.findOne({
+      where: { channelId: message.channelId, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    const updates: any = { status };
+    if (status === 'delivered' && !message.deliveredAt) {
+      updates.deliveredAt = new Date();
+    }
+    if (status === 'read') {
+      if (!message.deliveredAt) updates.deliveredAt = new Date();
+      updates.readAt = new Date();
+    }
+
+    await message.update(updates);
+
+    res.json({
+      message: 'Message status updated',
+      data: {
+        id: message.id,
+        status: message.status,
+        deliveredAt: message.deliveredAt,
+        readAt: message.readAt,
+      },
+    });
+  } catch (error) {
+    console.error('Update message status error:', error);
+    res.status(500).json({ error: 'Failed to update message status' });
   }
 };

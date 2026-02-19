@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "RAD5 Communication Tool API",
-    "description": "A real-time communication platform API supporting messaging, channels, file sharing, and user management.",
-    "version": "1.0.0",
+    "description": "A real-time communication platform API supporting messaging, channels, file sharing, video/audio calls, polls, and user management. Includes WebSocket support for real-time events via Socket.IO.",
+    "version": "2.0.0",
     "contact": {
       "name": "RAD5 Team"
     }
@@ -21,19 +21,19 @@
   "tags": [
     {
       "name": "Auth",
-      "description": "Authentication endpoints"
+      "description": "Authentication and password management endpoints"
     },
     {
       "name": "Users",
-      "description": "User management endpoints"
+      "description": "User management, profile, privacy, notifications, and avatar endpoints"
     },
     {
       "name": "Channels",
-      "description": "Channel management endpoints"
+      "description": "Channel and personal chat management endpoints"
     },
     {
       "name": "Messages",
-      "description": "Messaging endpoints"
+      "description": "Messaging, reactions, polls, file upload, and message status endpoints"
     }
   ],
   "paths": {
@@ -41,7 +41,7 @@
       "post": {
         "tags": ["Auth"],
         "summary": "Create a new user account",
-        "description": "Register a new user with name, email, and password",
+        "description": "Register a new user with name, email, and password.",
         "requestBody": {
           "required": true,
           "content": {
@@ -54,7 +54,7 @@
         },
         "responses": {
           "201": {
-            "description": "Account created successfully. User is automatically added to the 'General' channel.",
+            "description": "Account created successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -128,8 +128,8 @@
     "/auth/forgot-password": {
       "post": {
         "tags": ["Auth"],
-        "summary": "Request password reset",
-        "description": "Send password reset email to user",
+        "summary": "Request password reset OTP",
+        "description": "Sends a 6-digit OTP code to the user's email for password reset. The OTP expires in 15 minutes. Also sends a link-based reset email as fallback. Always returns success to prevent email enumeration.",
         "requestBody": {
           "required": true,
           "content": {
@@ -141,7 +141,7 @@
                   "email": {
                     "type": "string",
                     "format": "email",
-                    "example": "user@example.com"
+                    "example": "john@example.com"
                   }
                 }
               }
@@ -150,7 +150,7 @@
         },
         "responses": {
           "200": {
-            "description": "Request processed (always returns success for security)",
+            "description": "OTP sent (or silent success if email not found)",
             "content": {
               "application/json": {
                 "schema": {
@@ -164,6 +164,118 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Email is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verify-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify OTP code",
+        "description": "Verify the 6-digit OTP sent to the user's email during password reset. Returns a reset token on success.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyOtpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP verified successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "OTP verified successfully"
+                    },
+                    "resetToken": {
+                      "type": "string",
+                      "description": "Token to use for resetting the password"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or missing input, or expired OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/resend-otp": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Resend OTP code",
+        "description": "Resend a new 6-digit OTP to the user's email. Always returns success to prevent email enumeration.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "john@example.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP resent (or silent success if email not found)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "If an account exists, a new OTP has been sent"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -172,26 +284,13 @@
       "post": {
         "tags": ["Auth"],
         "summary": "Reset password with token",
-        "description": "Reset user password using the token from reset email",
+        "description": "Reset user's password using the token received from OTP verification or the email link.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["token", "password"],
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "example": "abc123resettoken"
-                  },
-                  "password": {
-                    "type": "string",
-                    "format": "password",
-                    "minLength": 8,
-                    "example": "NewSecurePassword123!"
-                  }
-                }
+                "$ref": "#/components/schemas/ResetPasswordRequest"
               }
             }
           }
@@ -206,7 +305,7 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Password reset successful"
+                      "example": "Password has been reset successfully"
                     }
                   }
                 }
@@ -214,7 +313,73 @@
             }
           },
           "400": {
-            "description": "Invalid or expired token",
+            "description": "Invalid or expired token, or weak password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Change password (authenticated)",
+        "description": "Change the current user's password. Requires the current password for verification.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Password changed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing fields or weak new password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Current password is incorrect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -230,34 +395,24 @@
       "get": {
         "tags": ["Users"],
         "summary": "Get all users",
-        "description": "Retrieve a paginated list of users with optional search",
+        "description": "Returns a paginated list of all users. Supports search by name.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "search",
             "in": "query",
-            "description": "Search users by name",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "page",
-            "in": "query",
-            "description": "Page number",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
+            "schema": { "type": "integer", "default": 1 }
           },
           {
-            "name": "limit",
             "in": "query",
-            "description": "Items per page",
-            "schema": {
-              "type": "integer",
-              "default": 20
-            }
+            "name": "limit",
+            "schema": { "type": "integer", "default": 50 }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": { "type": "string" },
+            "description": "Search users by name"
           }
         ],
         "responses": {
@@ -281,16 +436,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
         }
       }
@@ -299,7 +444,7 @@
       "get": {
         "tags": ["Users"],
         "summary": "Get current user",
-        "description": "Retrieve the authenticated user's profile",
+        "description": "Returns the authenticated user's full profile including unread message count",
         "security": [{ "BearerAuth": [] }],
         "responses": {
           "200": {
@@ -307,69 +452,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/users/{id}": {
-      "get": {
-        "tags": ["Users"],
-        "summary": "Get user by ID",
-        "description": "Retrieve a specific user's profile",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "User ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User profile",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user": {
-                      "$ref": "#/components/schemas/User"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/User"
                 }
               }
             }
@@ -381,7 +464,7 @@
       "put": {
         "tags": ["Users"],
         "summary": "Update user profile",
-        "description": "Update the authenticated user's profile (name, bio, avatar)",
+        "description": "Update user's name, bio, and/or avatar image (multipart form data)",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "content": {
@@ -391,16 +474,16 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "example": "John Doe"
+                    "maxLength": 100
                   },
                   "bio": {
                     "type": "string",
-                    "example": "Software developer"
+                    "maxLength": 500
                   },
                   "avatar": {
                     "type": "string",
                     "format": "binary",
-                    "description": "Avatar image file"
+                    "description": "Profile image file"
                   }
                 }
               }
@@ -409,7 +492,7 @@
         },
         "responses": {
           "200": {
-            "description": "Profile updated successfully",
+            "description": "Profile updated",
             "content": {
               "application/json": {
                 "schema": {
@@ -426,6 +509,16 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "No valid fields provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -434,9 +527,10 @@
       "put": {
         "tags": ["Users"],
         "summary": "Update privacy settings",
-        "description": "Update the authenticated user's privacy settings",
+        "description": "Update user's privacy preferences: lastSeen visibility, profile visibility, read receipts, and typing indicators",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -457,8 +551,8 @@
                       "type": "string",
                       "example": "Privacy settings updated"
                     },
-                    "user": {
-                      "$ref": "#/components/schemas/User"
+                    "privacy": {
+                      "$ref": "#/components/schemas/PrivacySettings"
                     }
                   }
                 }
@@ -472,9 +566,10 @@
       "put": {
         "tags": ["Users"],
         "summary": "Update notification settings",
-        "description": "Update the authenticated user's notification preferences",
+        "description": "Update notification preferences. All fields are optional — omitted fields retain their current values. Supports granular control over messages, groups, sounds, audio, images, videos, files, reactions, mentions, and calls.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -506,29 +601,205 @@
         }
       }
     },
-    "/channels": {
+    "/users/avatar": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Upload or update avatar",
+        "description": "Upload a new avatar image for the current user. Accepts multipart form data with an image file.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["avatar"],
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Image file to use as avatar"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Avatar updated successfully"
+                    },
+                    "avatar": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Cloudinary URL of the uploaded avatar"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Image file is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Remove avatar",
+        "description": "Remove the current user's avatar image",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Avatar removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Avatar removed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
       "get": {
-        "tags": ["Channels"],
-        "summary": "Get user's channels",
-        "description": "Retrieve all channels the authenticated user is a member of",
+        "tags": ["Users"],
+        "summary": "Get user by ID",
+        "description": "Returns a specific user's profile",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "search",
-            "in": "query",
-            "description": "Search channels by name or description",
-            "schema": {
-              "type": "string"
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
             }
           },
-          {
-            "name": "filter",
-            "in": "query",
-            "description": "Filter channels",
-            "schema": {
-              "type": "string",
-              "enum": ["starred", "archived", "muted", "unread", "groups", "personal", "active"]
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
+          }
+        }
+      }
+    },
+    "/users/{id}/avatar": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get user's avatar",
+        "description": "Returns a specific user's avatar URL along with their ID and name",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User avatar info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "avatar": {
+                      "type": "string",
+                      "format": "uri",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels": {
+      "get": {
+        "tags": ["Channels"],
+        "summary": "Get all channels",
+        "description": "Returns all channels (groups and personal chats) that the current user is a member of. Includes unread count, last message, and membership info.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 50 }
           }
         ],
         "responses": {
@@ -544,6 +815,9 @@
                       "items": {
                         "$ref": "#/components/schemas/Channel"
                       }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
                     }
                   }
                 }
@@ -555,7 +829,7 @@
       "post": {
         "tags": ["Channels"],
         "summary": "Create a new channel",
-        "description": "Create a new channel or group chat",
+        "description": "Create a new group channel. The creator is automatically added as admin.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -569,7 +843,7 @@
         },
         "responses": {
           "201": {
-            "description": "Channel created successfully",
+            "description": "Channel created",
             "content": {
               "application/json": {
                 "schema": {
@@ -600,22 +874,409 @@
         }
       }
     },
+    "/channels/personal/{recipientId}": {
+      "get": {
+        "tags": ["Channels"],
+        "summary": "Get personal chat",
+        "description": "Get or create a personal (DM) chat with the specified user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "The ID of the other user"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal chat details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Channel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recipient not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Get or create personal chat",
+        "description": "Get or create a personal (DM) chat with the specified user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal chat created or retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Channel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/messages": {
+      "get": {
+        "tags": ["Channels"],
+        "summary": "Get personal chat messages",
+        "description": "Get paginated messages from a personal chat",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Send a direct message",
+        "description": "Send a message in a personal chat. Creates the personal chat if it doesn't exist. Supports text, file attachments, audio, and polls.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "description": "Message text"
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "description": "File attachments"
+                  },
+                  "audio": {
+                    "type": "string",
+                    "description": "JSON string with url and duration for voice notes"
+                  },
+                  "poll": {
+                    "type": "string",
+                    "description": "JSON string with options array for polls"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "$ref": "#/components/schemas/Message"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Channels"],
+        "summary": "Clear personal chat messages",
+        "description": "Soft-deletes all messages sent by the current user in this personal chat. Sets text/attachments/audio/poll to null and marks as deleted.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Your messages in this chat have been cleared"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Personal chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/archive": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle archive personal chat",
+        "description": "Toggle the archived status of a personal chat for the current user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat archived"
+                    },
+                    "isArchived": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/star": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle star personal chat",
+        "description": "Toggle the starred status of a personal chat",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat starred"
+                    },
+                    "isStarred": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/mute": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle mute personal chat",
+        "description": "Toggle the muted status of a personal chat",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mute status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Chat muted"
+                    },
+                    "isMuted": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/personal/{recipientId}/settings": {
+      "patch": {
+        "tags": ["Channels"],
+        "summary": "Update personal chat settings",
+        "description": "Update multiple settings (archive, star, mute) for a personal chat at once",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean"
+                  },
+                  "isStarred": {
+                    "type": "boolean"
+                  },
+                  "isMuted": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Settings updated"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "isArchived": { "type": "boolean" },
+                        "isStarred": { "type": "boolean" },
+                        "isMuted": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{id}": {
       "get": {
         "tags": ["Channels"],
         "summary": "Get channel details",
-        "description": "Retrieve detailed information about a channel including members, media, and attachments",
+        "description": "Get detailed information about a channel including members, media, and attachments",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
@@ -650,121 +1311,23 @@
             }
           }
         }
-      }
-    },
-    "/channels/personal/{recipientId}": {
-      "get": {
-        "tags": ["Channels"],
-        "summary": "Get personal chat with a user",
-        "description": "Get or create a personal chat (DM) with a specific user",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Personal chat channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "channel": {
-                      "$ref": "#/components/schemas/Channel"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
       },
-      "post": {
+      "delete": {
         "tags": ["Channels"],
-        "summary": "Create personal chat with a user",
-        "description": "Explicitly create or get a personal chat (DM) with a specific user. Use this before fetching messages.",
+        "summary": "Delete a group channel",
+        "description": "Permanently delete a group channel and all its data (messages, reactions, memberships). Only group admins can delete. Cannot delete personal chats this way.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "recipientId",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Personal chat channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "channel": {
-                      "$ref": "#/components/schemas/Channel"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/personal/{recipientId}/archive": {
-      "post": {
-        "tags": ["Channels"],
-        "summary": "Toggle personal chat archive status",
-        "description": "Archive or unarchive a personal chat for the current user",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Archive status toggled successfully",
+            "description": "Group deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -772,18 +1335,15 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Chat archived successfully"
-                    },
-                    "isArchived": {
-                      "type": "boolean"
+                      "example": "Group deleted successfully"
                     }
                   }
                 }
               }
             }
           },
-          "404": {
-            "description": "Personal chat not found",
+          "400": {
+            "description": "Cannot delete a personal chat this way",
             "content": {
               "application/json": {
                 "schema": {
@@ -791,50 +1351,9 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/channels/personal/{recipientId}/star": {
-      "post": {
-        "tags": ["Channels"],
-        "summary": "Toggle personal chat star status",
-        "description": "Star or unstar a personal chat for the current user",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Star status toggled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Chat starred successfully"
-                    },
-                    "isStarred": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
           },
-          "404": {
-            "description": "Personal chat not found",
+          "403": {
+            "description": "Only admins can delete a group",
             "content": {
               "application/json": {
                 "schema": {
@@ -842,130 +1361,9 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/channels/personal/{recipientId}/mute": {
-      "post": {
-        "tags": ["Channels"],
-        "summary": "Toggle personal chat mute status",
-        "description": "Mute or unmute a personal chat for the current user",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Mute status toggled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Chat muted successfully"
-                    },
-                    "isMuted": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
           },
           "404": {
-            "description": "Personal chat not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/personal/{recipientId}/settings": {
-      "patch": {
-        "tags": ["Channels"],
-        "summary": "Update personal chat settings",
-        "description": "Explicitly set isArchived, isStarred, and/or isMuted for a personal chat",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "User ID of the recipient (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "isArchived": {
-                    "type": "boolean",
-                    "description": "Set archive status"
-                  },
-                  "isStarred": {
-                    "type": "boolean",
-                    "description": "Set star status"
-                  },
-                  "isMuted": {
-                    "type": "boolean",
-                    "description": "Set mute status"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Settings updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Chat settings updated successfully"
-                    },
-                    "settings": {
-                      "type": "object",
-                      "properties": {
-                        "isArchived": { "type": "boolean" },
-                        "isStarred": { "type": "boolean" },
-                        "isMuted": { "type": "boolean" }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Personal chat not found",
+            "description": "Channel not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -980,19 +1378,15 @@
     "/channels/{id}/members": {
       "post": {
         "tags": ["Channels"],
-        "summary": "Add member to channel",
-        "description": "Add a new member to the channel (admin only)",
+        "summary": "Add a member to channel",
+        "description": "Add a user as a member of the channel. Only admins can add members.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1006,7 +1400,7 @@
                   "userId": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "ID of user to add"
+                    "description": "ID of the user to add"
                   }
                 }
               }
@@ -1014,8 +1408,8 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Member added successfully",
+          "201": {
+            "description": "Member added",
             "content": {
               "application/json": {
                 "schema": {
@@ -1026,6 +1420,16 @@
                       "example": "Member added successfully"
                     }
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "User is already a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1046,34 +1450,27 @@
     "/channels/{id}/members/{memberId}": {
       "delete": {
         "tags": ["Channels"],
-        "summary": "Remove member from channel",
-        "description": "Remove a member from the channel (admin only)",
+        "summary": "Remove a member from channel",
+        "description": "Remove a user from the channel. Only admins can remove members.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           },
           {
-            "name": "memberId",
             "in": "path",
+            "name": "memberId",
             "required": true,
-            "description": "Member ID to remove (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "User ID of the member to remove"
           }
         ],
         "responses": {
           "200": {
-            "description": "Member removed successfully",
+            "description": "Member removed",
             "content": {
               "application/json": {
                 "schema": {
@@ -1101,27 +1498,23 @@
         }
       }
     },
-    "/channels/{id}/archive": {
+    "/channels/{id}/leave": {
       "post": {
         "tags": ["Channels"],
-        "summary": "Toggle channel archive status",
-        "description": "Archive or unarchive a channel for the current user",
+        "summary": "Leave a group channel",
+        "description": "Leave a group channel. Cannot leave personal chats. If the user is the only admin, the next oldest member is promoted to admin before the user leaves.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Archive status toggled successfully",
+            "description": "Left the channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -1129,13 +1522,19 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Channel archived successfully"
-                    },
-                    "isArchived": {
-                      "type": "boolean",
-                      "example": true
+                      "example": "You have left the channel"
                     }
                   }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot leave a personal chat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1146,6 +1545,53 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/archive": {
+      "post": {
+        "tags": ["Channels"],
+        "summary": "Toggle archive channel",
+        "description": "Toggle the archived status of a channel for the current user. This is a soft archive — the channel and its data are preserved.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Channel archived"
+                    },
+                    "isArchived": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               }
             }
@@ -1156,24 +1602,20 @@
     "/channels/{id}/star": {
       "post": {
         "tags": ["Channels"],
-        "summary": "Toggle channel star status",
-        "description": "Star or unstar a channel for the current user",
+        "summary": "Toggle star channel",
+        "description": "Toggle the starred status of a channel",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Star status toggled successfully",
+            "description": "Star status toggled",
             "content": {
               "application/json": {
                 "schema": {
@@ -1181,23 +1623,12 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Channel starred successfully"
+                      "example": "Channel starred"
                     },
                     "isStarred": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     }
                   }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not a member of this channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1208,24 +1639,20 @@
     "/channels/{id}/mute": {
       "post": {
         "tags": ["Channels"],
-        "summary": "Toggle channel mute status",
-        "description": "Mute or unmute notifications for a channel",
+        "summary": "Toggle mute channel",
+        "description": "Toggle the muted status of a channel",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Mute status toggled successfully",
+            "description": "Mute status toggled",
             "content": {
               "application/json": {
                 "schema": {
@@ -1233,122 +1660,12 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Channel muted successfully"
+                      "example": "Channel muted"
                     },
                     "isMuted": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     }
                   }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not a member of this channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/channels/{id}/settings": {
-      "patch": {
-        "tags": ["Channels"],
-        "summary": "Update channel settings explicitly",
-        "description": "Explicitly set isArchived, isStarred, and/or isMuted for a channel. Use this to unarchive, unstar, or unmute without toggling.",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "isArchived": {
-                    "type": "boolean",
-                    "description": "Set archive status (true = archived, false = unarchived)",
-                    "example": false
-                  },
-                  "isStarred": {
-                    "type": "boolean",
-                    "description": "Set star status (true = starred, false = unstarred)",
-                    "example": true
-                  },
-                  "isMuted": {
-                    "type": "boolean",
-                    "description": "Set mute status (true = muted, false = unmuted)",
-                    "example": false
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Settings updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Channel settings updated successfully"
-                    },
-                    "settings": {
-                      "type": "object",
-                      "properties": {
-                        "isArchived": {
-                          "type": "boolean"
-                        },
-                        "isStarred": {
-                          "type": "boolean"
-                        },
-                        "isMuted": {
-                          "type": "boolean"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "No valid settings provided",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Not a member of this channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1360,18 +1677,14 @@
       "post": {
         "tags": ["Channels"],
         "summary": "Mark channel as read",
-        "description": "Mark all messages in the channel as read",
+        "description": "Mark all messages in the channel as read for the current user",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
@@ -1385,10 +1698,102 @@
                     "message": {
                       "type": "string",
                       "example": "Channel marked as read"
-                    },
-                    "lastReadAt": {
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/settings": {
+      "patch": {
+        "tags": ["Channels"],
+        "summary": "Update channel settings",
+        "description": "Update multiple channel settings (archive, star, mute) at once",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": {
+                    "type": "boolean"
+                  },
+                  "isStarred": {
+                    "type": "boolean"
+                  },
+                  "isMuted": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
                       "type": "string",
-                      "format": "date-time"
+                      "example": "Channel settings updated"
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "isArchived": { "type": "boolean" },
+                        "isStarred": { "type": "boolean" },
+                        "isMuted": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{id}/messages": {
+      "delete": {
+        "tags": ["Channels"],
+        "summary": "Clear channel messages",
+        "description": "Soft-deletes all messages sent by the current user in this channel. Sets text/attachments/audio/poll to null and marks as deleted. Also resets lastReadAt.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Your messages in this channel have been cleared"
                     }
                   }
                 }
@@ -1397,169 +1802,6 @@
           },
           "403": {
             "description": "Not a member of this channel",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-
-    "/channels/personal/{recipientId}/messages": {
-      "get": {
-        "tags": ["Messages"],
-        "summary": "Get personal chat messages",
-        "description": "Retrieve paginated messages from a personal chat",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "Recipient user ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Messages per page",
-            "schema": {
-              "type": "integer",
-              "default": 50
-            }
-          },
-          {
-            "name": "before",
-            "in": "query",
-            "description": "Get messages before this timestamp (ISO 8601)",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Messages retrieved successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessagesResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Personal chat not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["Messages"],
-        "summary": "Send a direct message",
-        "description": "Send a direct message to a user. Creates the personal chat if it doesn't exist.",
-        "security": [{ "BearerAuth": [] }],
-        "parameters": [
-          {
-            "name": "recipientId",
-            "in": "path",
-            "required": true,
-            "description": "Recipient user ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["text"],
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "description": "Message text content",
-                    "example": "Hello, how are you?"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Direct message sent successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Direct message sent"
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Message"
-                    },
-                    "channel": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "name": {
-                          "type": "string"
-                        },
-                        "isGroup": {
-                          "type": "boolean",
-                          "example": false
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request (missing text or messaging self)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Recipient not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1575,45 +1817,24 @@
       "get": {
         "tags": ["Messages"],
         "summary": "Get channel messages",
-        "description": "Retrieve paginated messages from a channel",
+        "description": "Get paginated messages from a channel. Includes sender info, reactions, attachments, audio, polls, and message status.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "channelId",
             "in": "path",
+            "name": "channelId",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           },
           {
+            "in": "query",
             "name": "page",
-            "in": "query",
-            "description": "Page number",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
+            "schema": { "type": "integer", "default": 1 }
           },
           {
+            "in": "query",
             "name": "limit",
-            "in": "query",
-            "description": "Messages per page",
-            "schema": {
-              "type": "integer",
-              "default": 50
-            }
-          },
-          {
-            "name": "before",
-            "in": "query",
-            "description": "Get messages before this timestamp (ISO 8601)",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "schema": { "type": "integer", "default": 50 }
           }
         ],
         "responses": {
@@ -1653,18 +1874,14 @@
       "post": {
         "tags": ["Messages"],
         "summary": "Send a message",
-        "description": "Send a new message to a channel with optional attachments, audio, or poll",
+        "description": "Send a message to a channel. Supports text, file attachments, audio/voice notes, and polls via multipart form data.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "channelId",
             "in": "path",
+            "name": "channelId",
             "required": true,
-            "description": "Channel ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1677,7 +1894,7 @@
                     "type": "string",
                     "description": "Message text content"
                   },
-                  "attachments": {
+                  "files": {
                     "type": "array",
                     "items": {
                       "type": "string",
@@ -1687,16 +1904,11 @@
                   },
                   "audio": {
                     "type": "string",
-                    "format": "binary",
-                    "description": "Audio message file"
-                  },
-                  "audioDuration": {
-                    "type": "string",
-                    "description": "Duration of audio message (e.g., '0:30')"
+                    "description": "JSON string: {\"url\": \"string\", \"duration\": \"string\"}"
                   },
                   "poll": {
                     "type": "string",
-                    "description": "JSON string with poll options"
+                    "description": "JSON string: {\"options\": [\"Option A\", \"Option B\"]}"
                   }
                 }
               }
@@ -1712,10 +1924,6 @@
                   "type": "object",
                   "properties": {
                     "message": {
-                      "type": "string",
-                      "example": "Message sent"
-                    },
-                    "data": {
                       "$ref": "#/components/schemas/Message"
                     }
                   }
@@ -1724,7 +1932,7 @@
             }
           },
           "400": {
-            "description": "Message must have content",
+            "description": "Message must have text, file, audio, or poll content",
             "content": {
               "application/json": {
                 "schema": {
@@ -1750,18 +1958,14 @@
       "put": {
         "tags": ["Messages"],
         "summary": "Edit a message",
-        "description": "Edit a message (only within 20 minutes of sending)",
+        "description": "Edit the text of a message. Only the message sender can edit.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Message ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1783,17 +1987,13 @@
         },
         "responses": {
           "200": {
-            "description": "Message updated",
+            "description": "Message edited",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "message": {
-                      "type": "string",
-                      "example": "Message updated"
-                    },
-                    "data": {
                       "$ref": "#/components/schemas/Message"
                     }
                   }
@@ -1802,7 +2002,7 @@
             }
           },
           "403": {
-            "description": "Cannot edit this message (not owner or outside edit window)",
+            "description": "Can only edit your own messages",
             "content": {
               "application/json": {
                 "schema": {
@@ -1826,18 +2026,14 @@
       "delete": {
         "tags": ["Messages"],
         "summary": "Delete a message",
-        "description": "Soft delete a message (only within 20 minutes of sending)",
+        "description": "Soft-delete a message. Only the message sender can delete.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Message ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "responses": {
@@ -1850,7 +2046,7 @@
                   "properties": {
                     "message": {
                       "type": "string",
-                      "example": "Message deleted"
+                      "example": "Message deleted successfully"
                     }
                   }
                 }
@@ -1858,7 +2054,7 @@
             }
           },
           "403": {
-            "description": "Cannot delete this message",
+            "description": "Can only delete your own messages",
             "content": {
               "application/json": {
                 "schema": {
@@ -1883,19 +2079,15 @@
     "/messages/{id}/reactions": {
       "post": {
         "tags": ["Messages"],
-        "summary": "Add/toggle reaction",
-        "description": "Add a reaction to a message or remove it if already added",
+        "summary": "Add or toggle reaction",
+        "description": "Add a reaction to a message or remove it if the same reaction already exists (toggle behavior)",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
             "required": true,
-            "description": "Message ID (UUID)",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
+            "schema": { "type": "string", "format": "uuid" }
           }
         ],
         "requestBody": {
@@ -1908,7 +2100,6 @@
                 "properties": {
                   "emoji": {
                     "type": "string",
-                    "description": "Emoji character",
                     "example": "👍"
                   }
                 }
@@ -1928,11 +2119,198 @@
                       "type": "string",
                       "example": "Reaction added"
                     },
-                    "action": {
-                      "type": "string",
-                      "enum": ["added", "removed"]
+                    "reactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "emoji": { "type": "string" },
+                          "user": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string", "format": "uuid" },
+                              "name": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{id}/poll/vote": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Vote on a poll",
+        "description": "Vote on a poll option in a message. Removes any previous vote by the user (single-vote polls). The option must be one of the poll's defined options.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Message ID containing the poll"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VotePollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vote recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Vote recorded"
+                    },
+                    "poll": {
+                      "type": "object",
+                      "properties": {
+                        "options": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        },
+                        "votes": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": { "type": "string", "format": "uuid" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid option or message has no poll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Message not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{id}/status": {
+      "patch": {
+        "tags": ["Messages"],
+        "summary": "Update message status",
+        "description": "Update the delivery/read status of a message. Only the recipient (not the sender) can update the status. Setting 'read' also sets deliveredAt if not already set.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMessageStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Message status updated"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" },
+                        "status": {
+                          "type": "string",
+                          "enum": ["sent", "delivered", "read"]
+                        },
+                        "deliveredAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "readAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status or cannot update own message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1954,7 +2332,7 @@
       "post": {
         "tags": ["Messages"],
         "summary": "Upload a file",
-        "description": "Upload a generic file to Cloudinary",
+        "description": "Upload a single file to Cloudinary. Returns the file URL and metadata.",
         "security": [{ "BearerAuth": [] }],
         "requestBody": {
           "required": true,
@@ -1984,16 +2362,19 @@
                   "properties": {
                     "url": {
                       "type": "string",
-                      "format": "uri",
-                      "description": "Cloudinary URL of uploaded file"
+                      "format": "uri"
                     },
-                    "type": {
-                      "type": "string",
-                      "description": "File type"
+                    "publicId": {
+                      "type": "string"
                     },
-                    "originalName": {
-                      "type": "string",
-                      "description": "Original filename"
+                    "resourceType": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "integer"
                     }
                   }
                 }
@@ -2064,6 +2445,79 @@
           }
         }
       },
+      "VerifyOtpRequest": {
+        "type": "object",
+        "required": ["email", "otp"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john@example.com"
+          },
+          "otp": {
+            "type": "string",
+            "description": "6-digit OTP code sent to email",
+            "example": "123456"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": ["token", "newPassword"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Reset token received from OTP verification or email link"
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "description": "Must contain uppercase, lowercase, number, and special character",
+            "example": "NewSecurePass123!"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password",
+            "description": "The user's current password"
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "minLength": 8,
+            "description": "Must contain uppercase, lowercase, number, and special character",
+            "example": "NewSecurePass123!"
+          }
+        }
+      },
+      "VotePollRequest": {
+        "type": "object",
+        "required": ["option"],
+        "properties": {
+          "option": {
+            "type": "string",
+            "description": "The poll option to vote for (must match one of the poll's options exactly)",
+            "example": "Option A"
+          }
+        }
+      },
+      "UpdateMessageStatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["delivered", "read"],
+            "description": "The new status for the message"
+          }
+        }
+      },
       "AuthResponse": {
         "type": "object",
         "properties": {
@@ -2098,7 +2552,8 @@
           "avatar": {
             "type": "string",
             "format": "uri",
-            "nullable": true
+            "nullable": true,
+            "description": "Cloudinary URL of the user's avatar image"
           },
           "bio": {
             "type": "string",
@@ -2167,18 +2622,57 @@
       },
       "NotificationSettings": {
         "type": "object",
+        "description": "Granular notification preferences. All fields are optional when updating — omitted fields retain current values.",
         "properties": {
           "messages": {
             "type": "boolean",
-            "default": true
+            "default": true,
+            "description": "Receive notifications for new messages"
           },
           "groups": {
             "type": "boolean",
-            "default": true
+            "default": true,
+            "description": "Receive notifications for group activity"
           },
           "sounds": {
             "type": "boolean",
-            "default": true
+            "default": true,
+            "description": "Enable notification sounds"
+          },
+          "audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for audio/voice messages"
+          },
+          "images": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for image messages"
+          },
+          "videos": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for video messages"
+          },
+          "files": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for file attachments"
+          },
+          "reactions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for reactions to your messages"
+          },
+          "mentions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications when mentioned"
+          },
+          "calls": {
+            "type": "boolean",
+            "default": true,
+            "description": "Receive notifications for incoming calls"
           }
         }
       },
@@ -2389,6 +2883,23 @@
           },
           "isEdited": {
             "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["sent", "delivered", "read"],
+            "description": "Message delivery status"
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Timestamp when the message was delivered"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Timestamp when the message was read"
           },
           "reactions": {
             "type": "array",

@@ -21,11 +21,14 @@ interface MessageAttributes {
   poll: PollInfo | null;
   isEdited: boolean;
   isDeleted: boolean;
+  status: 'sent' | 'delivered' | 'read';
+  deliveredAt: Date | null;
+  readAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface MessageCreationAttributes extends Optional<MessageAttributes, 'id' | 'text' | 'attachments' | 'audio' | 'poll' | 'isEdited' | 'isDeleted'> {}
+interface MessageCreationAttributes extends Optional<MessageAttributes, 'id' | 'text' | 'attachments' | 'audio' | 'poll' | 'isEdited' | 'isDeleted' | 'status' | 'deliveredAt' | 'readAt'> {}
 
 class Message extends Model<MessageAttributes, MessageCreationAttributes> implements MessageAttributes {
   declare id: string;
@@ -37,6 +40,9 @@ class Message extends Model<MessageAttributes, MessageCreationAttributes> implem
   declare poll: PollInfo | null;
   declare isEdited: boolean;
   declare isDeleted: boolean;
+  declare status: 'sent' | 'delivered' | 'read';
+  declare deliveredAt: Date | null;
+  declare readAt: Date | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 
@@ -84,6 +90,18 @@ Message.init(
     isDeleted: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    status: {
+      type: DataTypes.ENUM('sent', 'delivered', 'read'),
+      defaultValue: 'sent',
+    },
+    deliveredAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    readAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
   },
   {

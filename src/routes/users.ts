@@ -5,7 +5,10 @@ import {
   getCurrentUser, 
   updateProfile, 
   updatePrivacySettings, 
-  updateNotificationSettings 
+  updateNotificationSettings,
+  getUserAvatar,
+  updateAvatar,
+  deleteAvatar
 } from '../controllers/userController';
 import { authenticate } from '../middleware/auth';
 import { uploadAvatar } from '../middleware/upload';
@@ -21,9 +24,6 @@ router.get('/', getUsers);
 // GET /api/users/me
 router.get('/me', getCurrentUser);
 
-// GET /api/users/:id
-router.get('/:id', getUser);
-
 // PUT /api/users/profile (with avatar upload)
 router.put('/profile', uploadAvatar, updateProfile);
 
@@ -32,5 +32,17 @@ router.put('/privacy', updatePrivacySettings);
 
 // PUT /api/users/notifications
 router.put('/notifications', updateNotificationSettings);
+
+// PUT /api/users/avatar - Upload/update avatar
+router.put('/avatar', uploadAvatar, updateAvatar);
+
+// DELETE /api/users/avatar - Remove avatar
+router.delete('/avatar', deleteAvatar);
+
+// GET /api/users/:id/avatar - Get user's avatar
+router.get('/:id/avatar', getUserAvatar);
+
+// GET /api/users/:id
+router.get('/:id', getUser);
 
 export default router;

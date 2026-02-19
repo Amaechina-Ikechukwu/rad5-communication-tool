@@ -5,7 +5,9 @@ import {
   editMessage, 
   deleteMessage, 
   addReaction,
-  uploadFile 
+  uploadFile,
+  votePoll,
+  updateMessageStatus
 } from '../controllers/messageController';
 import { authenticate } from '../middleware/auth';
 import { uploadMessageFiles, uploadAttachments } from '../middleware/upload';
@@ -30,6 +32,12 @@ router.delete('/messages/:id', deleteMessage);
 
 // POST /api/messages/:id/reactions
 router.post('/messages/:id/reactions', addReaction);
+
+// POST /api/messages/:id/poll/vote
+router.post('/messages/:id/poll/vote', votePoll);
+
+// PATCH /api/messages/:id/status
+router.patch('/messages/:id/status', updateMessageStatus);
 
 // POST /api/upload (generic file upload)
 router.post('/upload', multer({ storage: multer.memoryStorage() }).single('file'), uploadFile);

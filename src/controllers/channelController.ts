@@ -1018,3 +1018,164 @@ const findPersonalChat = async (userId: string, recipientId: string) => {
            memberIds.includes(recipientId);
   });
 };
+
+// POST /api/channels/:id/leave - Leave a group channel
+export const leaveChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const channelId = id as string;
+    const userId = req.user!.id;
+
+    const channel = await Channel.findByPk(channelId);
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    if (!channel.isGroup) {
+      res.status(400).json({ error: 'Cannot leave a personal chat. Use delete instead.' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // If user is the only admin, promote another member or prevent leaving
+    if (membership.role === 'admin') {
+      const otherAdmins = await ChannelMember.count({
+        where: { channelId, role: 'admin', userId: { [Op.ne]: userId } },
+      });
+
+      if (otherAdmins === 0) {
+        const nextMember = await ChannelMember.findOne({
+          where: { channelId, userId: { [Op.ne]: userId } },
+          order: [['joinedAt', 'ASC']],
+        });
+
+        if (nextMember) {
+          await nextMember.update({ role: 'admin' });
+        }
+      }
+    }
+
+    await membership.destroy();
+
+    res.json({ message: 'You have left the channel' });
+  } catch (error) {
+    console.error('Leave channel error:', error);
+    res.status(500).json({ error: 'Failed to leave channel' });
+  }
+};
+
+// DELETE /api/channels/:id - Delete a group channel (admin only)
+export const deleteChannel = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const channelId = id as string;
+    const userId = req.user!.id;
+
+    const channel = await Channel.findByPk(channelId);
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    if (!channel.isGroup) {
+      res.status(400).json({ error: 'Cannot delete a personal chat this way' });
+      return;
+    }
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId, userId, role: 'admin' },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'Only admins can delete a group' });
+      return;
+    }
+
+    // Delete all messages, reactions, memberships, and the channel
+    const { Reaction } = require('../models');
+    const messageIds = (await Message.findAll({ where: { channelId }, attributes: ['id'] })).map((m: any) => m.id);
+    if (messageIds.length > 0) {
+      await Reaction.destroy({ where: { messageId: { [Op.in]: messageIds } } });
+    }
+    await Message.destroy({ where: { channelId } });
+    await ChannelMember.destroy({ where: { channelId } });
+    await channel.destroy();
+
+    res.json({ message: 'Group deleted successfully' });
+  } catch (error) {
+    console.error('Delete channel error:', error);
+    res.status(500).json({ error: 'Failed to delete group' });
+  }
+};
+
+// DELETE /api/channels/:id/messages - Clear all messages in a channel (for the user)
+export const clearChannelMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const channelId = id as string;
+    const userId = req.user!.id;
+
+    const membership = await ChannelMember.findOne({
+      where: { channelId, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    // Soft-delete all messages the user sent in this channel
+    await Message.update(
+      { isDeleted: true, text: null, attachments: [], audio: null, poll: null },
+      { where: { channelId, senderId: userId } }
+    );
+
+    // Update lastReadAt to now so unread count resets
+    await membership.update({ lastReadAt: new Date() });
+
+    res.json({ message: 'Your messages in this channel have been cleared' });
+  } catch (error) {
+    console.error('Clear channel messages error:', error);
+    res.status(500).json({ error: 'Failed to clear messages' });
+  }
+};
+
+// DELETE /api/channels/personal/:recipientId/messages - Clear personal chat messages
+export const clearPersonalChatMessages = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const userId = req.user!.id;
+
+    const personalChat = await findPersonalChat(userId, recipientId as string);
+    if (!personalChat) {
+      res.status(404).json({ error: 'Personal chat not found' });
+      return;
+    }
+
+    // Soft-delete all messages the user sent
+    await Message.update(
+      { isDeleted: true, text: null, attachments: [], audio: null, poll: null },
+      { where: { channelId: personalChat.id, senderId: userId } }
+    );
+
+    // Update lastReadAt
+    await ChannelMember.update(
+      { lastReadAt: new Date() },
+      { where: { channelId: personalChat.id, userId } }
+    );
+
+    res.json({ message: 'Your messages in this chat have been cleared' });
+  } catch (error) {
+    console.error('Clear personal chat messages error:', error);
+    res.status(500).json({ error: 'Failed to clear messages' });
+  }
+};

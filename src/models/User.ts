@@ -6,6 +6,13 @@ interface NotificationSettings {
   messages: boolean;
   groups: boolean;
   sounds: boolean;
+  audio: boolean;
+  images: boolean;
+  videos: boolean;
+  files: boolean;
+  reactions: boolean;
+  mentions: boolean;
+  calls: boolean;
 }
 
 interface UserAttributes {
@@ -115,6 +122,13 @@ User.init(
         messages: true,
         groups: true,
         sounds: true,
+        audio: true,
+        images: true,
+        videos: true,
+        files: true,
+        reactions: true,
+        mentions: true,
+        calls: true,
       },
     },
     resetToken: {
