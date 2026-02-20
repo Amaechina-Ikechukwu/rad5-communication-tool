@@ -27,6 +27,22 @@ const findExistingDm = async (userId: string, recipientId: string) => {
   return DirectMessage.findByPk(recipientMembership.dmId);
 };
 
+// Helper: find a DM by its own ID (if the param IS a DM id) or by recipient user ID
+// The frontend may pass either the DM id or the recipient's user id
+const findDmByIdOrRecipient = async (userId: string, idOrRecipient: string) => {
+  // First, try treating idOrRecipient as the DM's own ID
+  const directLookup = await DirectMessageMember.findOne({
+    where: { dmId: idOrRecipient, userId },
+  });
+
+  if (directLookup) {
+    return DirectMessage.findByPk(idOrRecipient);
+  }
+
+  // Otherwise, treat it as a recipient user ID
+  return findExistingDm(userId, idOrRecipient);
+};
+
 // GET /api/dms - List all DM conversations
 export const getDms = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -348,8 +364,8 @@ export const getDmMessages = async (req: AuthRequest, res: Response): Promise<vo
     const userId = req.user!.id;
     const offset = (Number(page) - 1) * Number(limit);
 
-    // Find existing DM
-    const dm = await findExistingDm(userId, recipientId);
+    // Find DM by DM ID or recipient user ID
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
 
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
@@ -426,7 +442,7 @@ export const archiveDm = async (req: AuthRequest, res: Response): Promise<void> 
     const { recipientId } = req.params;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
@@ -461,7 +477,7 @@ export const starDm = async (req: AuthRequest, res: Response): Promise<void> => 
     const { recipientId } = req.params;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
@@ -496,7 +512,7 @@ export const muteDm = async (req: AuthRequest, res: Response): Promise<void> => 
     const { recipientId } = req.params;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
@@ -532,7 +548,7 @@ export const updateDmSettings = async (req: AuthRequest, res: Response): Promise
     const { isArchived, isStarred, isMuted } = req.body;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
@@ -580,7 +596,7 @@ export const markDmAsRead = async (req: AuthRequest, res: Response): Promise<voi
     const { recipientId } = req.params;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
@@ -613,7 +629,7 @@ export const clearDmMessages = async (req: AuthRequest, res: Response): Promise<
     const { recipientId } = req.params;
     const userId = req.user!.id;
 
-    const dm = await findExistingDm(userId, recipientId);
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
     if (!dm) {
       res.status(404).json({ error: 'DM conversation not found' });
       return;
