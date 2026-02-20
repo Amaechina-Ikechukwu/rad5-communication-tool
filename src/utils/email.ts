@@ -23,7 +23,7 @@ export const sendPasswordResetEmail = async (
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
   const mailOptions = {
-    from: process.env.SMTP_FROM || 'noreply@rad5comms.com',
+    from: `"Rad5 Comms" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to: email,
     subject: 'Password Reset Request - Rad5 Comms',
     html: `
@@ -56,7 +56,7 @@ export const sendWelcomeEmail = async (
   name: string
 ): Promise<void> => {
   const mailOptions = {
-    from: process.env.SMTP_FROM || 'noreply@rad5comms.com',
+    from: `"Rad5 Comms" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to: email,
     subject: 'Welcome to Rad5 Comms!',
     html: `
@@ -81,7 +81,7 @@ export const sendOtpEmail = async (
   otp: string
 ): Promise<void> => {
   const mailOptions = {
-    from: process.env.SMTP_FROM || 'noreply@rad5comms.com',
+    from: `"Rad5 Comms" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to: email,
     subject: 'Your Password Reset Code - Rad5 Comms',
     html: `
