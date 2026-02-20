@@ -9,10 +9,11 @@ interface DirectMessageMemberAttributes {
   isStarred: boolean;
   isMuted: boolean;
   lastReadAt: Date | null;
+  clearedAt: Date | null;
   joinedAt?: Date;
 }
 
-interface DirectMessageMemberCreationAttributes extends Optional<DirectMessageMemberAttributes, 'id' | 'isArchived' | 'isStarred' | 'isMuted' | 'lastReadAt'> {}
+interface DirectMessageMemberCreationAttributes extends Optional<DirectMessageMemberAttributes, 'id' | 'isArchived' | 'isStarred' | 'isMuted' | 'lastReadAt' | 'clearedAt'> {}
 
 class DirectMessageMember extends Model<DirectMessageMemberAttributes, DirectMessageMemberCreationAttributes> implements DirectMessageMemberAttributes {
   declare id: string;
@@ -22,6 +23,7 @@ class DirectMessageMember extends Model<DirectMessageMemberAttributes, DirectMes
   declare isStarred: boolean;
   declare isMuted: boolean;
   declare lastReadAt: Date | null;
+  declare clearedAt: Date | null;
   declare readonly joinedAt: Date;
 }
 
@@ -53,6 +55,11 @@ DirectMessageMember.init(
       defaultValue: false,
     },
     lastReadAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    clearedAt: {
       type: DataTypes.DATE,
       allowNull: true,
       defaultValue: null,

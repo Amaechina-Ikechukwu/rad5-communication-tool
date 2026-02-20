@@ -49,6 +49,7 @@ export const getChannels = async (req: AuthRequest, res: Response): Promise<void
             isDeleted: false,
             senderId: { [Op.ne]: userId },
             ...(m.lastReadAt && { createdAt: { [Op.gt]: m.lastReadAt } }),
+            ...(m.clearedAt && { createdAt: { [Op.gt]: m.clearedAt } }),
           },
         });
 
@@ -599,16 +600,11 @@ export const clearChannelMessages = async (req: AuthRequest, res: Response): Pro
       return;
     }
 
-    // Soft-delete all messages the user sent in this channel
-    await Message.update(
-      { isDeleted: true, text: null, attachments: [], audio: null, poll: null },
-      { where: { channelId, senderId: userId } }
-    );
+    // Set clearedAt to now — messages before this timestamp won't be shown to this user
+    // Other members' views are unaffected
+    await membership.update({ clearedAt: new Date(), lastReadAt: new Date() });
 
-    // Update lastReadAt to now so unread count resets
-    await membership.update({ lastReadAt: new Date() });
-
-    res.json({ message: 'Your messages in this channel have been cleared' });
+    res.json({ message: 'Chat cleared successfully' });
   } catch (error) {
     console.error('Clear channel messages error:', error);
     res.status(500).json({ error: 'Failed to clear messages' });

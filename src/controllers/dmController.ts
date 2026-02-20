@@ -80,6 +80,7 @@ export const getDms = async (req: AuthRequest, res: Response): Promise<void> => 
             isDeleted: false,
             senderId: { [Op.ne]: userId },
             ...(m.lastReadAt && { createdAt: { [Op.gt]: m.lastReadAt } }),
+            ...(m.clearedAt && { createdAt: { [Op.gt]: m.clearedAt } }),
           },
         });
 
@@ -373,8 +374,17 @@ export const getDmMessages = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     const whereClause: any = { dmId: dm.id, isDeleted: false };
+
+    // Respect clearedAt - only show messages after the user cleared the chat
+    const membership = await DirectMessageMember.findOne({
+      where: { dmId: dm.id, userId },
+    });
+    if (membership?.clearedAt) {
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [Op.gt]: membership.clearedAt };
+    }
+
     if (before) {
-      whereClause.createdAt = { [Op.lt]: new Date(before as string) };
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [Op.lt]: new Date(before as string) };
     }
 
     const { count, rows: messages } = await Message.findAndCountAll({
@@ -635,21 +645,22 @@ export const clearDmMessages = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Soft-delete messages the user sent
-    await Message.update(
-      { isDeleted: true, text: null, attachments: [], audio: null, poll: null },
-      { where: { dmId: dm.id, senderId: userId } }
-    );
+    const membership = await DirectMessageMember.findOne({
+      where: { dmId: dm.id, userId },
+    });
 
-    // Update lastReadAt
-    await DirectMessageMember.update(
-      { lastReadAt: new Date() },
-      { where: { dmId: dm.id, userId } }
-    );
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this DM' });
+      return;
+    }
 
-    res.json({ message: 'Your messages in this DM have been cleared' });
+    // Set clearedAt to now — messages before this timestamp won't be shown to this user
+    // The other person's view is unaffected
+    await membership.update({ clearedAt: new Date(), lastReadAt: new Date() });
+
+    res.json({ message: 'Chat cleared successfully' });
   } catch (error) {
     console.error('Clear DM messages error:', error);
-    res.status(500).json({ error: 'Failed to clear DM messages' });
+    res.status(500).json({ error: 'Failed to clear messages' });
   }
 };

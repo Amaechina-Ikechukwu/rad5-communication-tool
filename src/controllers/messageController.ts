@@ -23,8 +23,14 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
     }
 
     const whereClause: any = { channelId, isDeleted: false };
+
+    // Respect clearedAt - only show messages after the user cleared the chat
+    if (membership.clearedAt) {
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [require('sequelize').Op.gt]: membership.clearedAt };
+    }
+
     if (before) {
-      whereClause.createdAt = { [require('sequelize').Op.lt]: new Date(before as string) };
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [require('sequelize').Op.lt]: new Date(before as string) };
     }
 
     const { count, rows: messages } = await Message.findAndCountAll({

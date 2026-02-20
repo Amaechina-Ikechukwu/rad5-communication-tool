@@ -10,10 +10,11 @@ interface ChannelMemberAttributes {
   isStarred: boolean;
   isMuted: boolean;
   lastReadAt: Date | null;
+  clearedAt: Date | null;
   joinedAt?: Date;
 }
 
-interface ChannelMemberCreationAttributes extends Optional<ChannelMemberAttributes, 'id' | 'role' | 'isArchived' | 'isStarred' | 'isMuted' | 'lastReadAt'> {}
+interface ChannelMemberCreationAttributes extends Optional<ChannelMemberAttributes, 'id' | 'role' | 'isArchived' | 'isStarred' | 'isMuted' | 'lastReadAt' | 'clearedAt'> {}
 
 class ChannelMember extends Model<ChannelMemberAttributes, ChannelMemberCreationAttributes> implements ChannelMemberAttributes {
   declare id: string;
@@ -24,6 +25,7 @@ class ChannelMember extends Model<ChannelMemberAttributes, ChannelMemberCreation
   declare isStarred: boolean;
   declare isMuted: boolean;
   declare lastReadAt: Date | null;
+  declare clearedAt: Date | null;
   declare readonly joinedAt: Date;
 }
 
@@ -59,6 +61,11 @@ ChannelMember.init(
       defaultValue: false,
     },
     lastReadAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    clearedAt: {
       type: DataTypes.DATE,
       allowNull: true,
       defaultValue: null,
