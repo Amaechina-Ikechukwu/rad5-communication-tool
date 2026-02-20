@@ -29,7 +29,11 @@
     },
     {
       "name": "Channels",
-      "description": "Channel and personal chat management endpoints"
+      "description": "Group channel management endpoints"
+    },
+    {
+      "name": "Direct Messages",
+      "description": "Direct message (DM) conversation endpoints"
     },
     {
       "name": "Messages",
@@ -788,7 +792,7 @@
       "get": {
         "tags": ["Channels"],
         "summary": "Get all channels",
-        "description": "Returns all channels (groups and personal chats) that the current user is a member of. Includes unread count, last message, and membership info.",
+        "description": "Returns all group channels that the current user is a member of. Includes unread count, last message, and membership info. DMs are no longer returned here — use /dms instead.",
         "security": [{ "BearerAuth": [] }],
         "parameters": [
           {
@@ -2393,6 +2397,433 @@
           }
         }
       }
+    },
+    "/dms": {
+      "get": {
+        "tags": ["Direct Messages"],
+        "summary": "List all DM conversations",
+        "description": "Returns all direct message conversations the current user is part of. Supports search by participant name and filtering.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": { "type": "string" },
+            "description": "Search DMs by participant name"
+          },
+          {
+            "in": "query",
+            "name": "filter",
+            "schema": { "type": "string", "enum": ["starred", "archived", "muted", "unread", "active", "all"] },
+            "description": "Filter DMs by status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of DM conversations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dms": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}": {
+      "get": {
+        "tags": ["Direct Messages"],
+        "summary": "Get or create DM",
+        "description": "Returns the DM conversation with the specified user, creating one if it doesn't exist.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "User ID of the DM recipient"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DM conversation details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dm": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot create DM with yourself"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Create DM",
+        "description": "Creates a DM conversation with the specified user (same as GET, but uses POST).",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DM conversation details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dm": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/messages": {
+      "get": {
+        "tags": ["Direct Messages"],
+        "summary": "Get DM messages",
+        "description": "Returns paginated messages from a DM conversation.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "type": "integer", "default": 50 }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Get messages before this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DM messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Message" }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/Pagination" }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "DM conversation not found"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Send a DM",
+        "description": "Send a direct message to a user. Creates the DM conversation if it doesn't exist.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "example": "Hey, how's it going?"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "data": { "$ref": "#/components/schemas/Message" },
+                    "dm": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Direct Messages"],
+        "summary": "Clear DM messages",
+        "description": "Soft-deletes all messages you sent in this DM.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages cleared"
+          },
+          "404": {
+            "description": "DM conversation not found"
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/archive": {
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Toggle DM archive",
+        "description": "Toggle the archive status of a DM conversation.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "isArchived": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/star": {
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Toggle DM star",
+        "description": "Toggle the starred status of a DM conversation.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Star status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "isStarred": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/mute": {
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Toggle DM mute",
+        "description": "Toggle the muted status of a DM conversation.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mute status toggled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "isMuted": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/read": {
+      "post": {
+        "tags": ["Direct Messages"],
+        "summary": "Mark DM as read",
+        "description": "Mark all messages in a DM as read.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "DM marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "lastReadAt": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dms/{recipientId}/settings": {
+      "patch": {
+        "tags": ["Direct Messages"],
+        "summary": "Update DM settings",
+        "description": "Update archive, star, and mute settings for a DM conversation.",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recipientId",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "isArchived": { "type": "boolean" },
+                  "isStarred": { "type": "boolean" },
+                  "isMuted": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string" },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "isArchived": { "type": "boolean" },
+                        "isStarred": { "type": "boolean" },
+                        "isMuted": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No valid settings provided"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2987,6 +3418,41 @@
           "hasMore": {
             "type": "boolean"
           }
+        }
+      },
+      "DirectMessageSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "participant": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "name": { "type": "string" },
+              "avatar": { "type": "string", "format": "uri", "nullable": true },
+              "isOnline": { "type": "boolean" },
+              "lastActive": { "type": "string", "format": "date-time", "nullable": true }
+            }
+          },
+          "lastMessage": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "text": { "type": "string", "nullable": true },
+              "senderId": { "type": "string", "format": "uuid" },
+              "senderName": { "type": "string" },
+              "time": { "type": "string", "format": "date-time" },
+              "status": { "type": "string", "enum": ["sent", "delivered", "read"] }
+            }
+          },
+          "isArchived": { "type": "boolean" },
+          "isStarred": { "type": "boolean" },
+          "isMuted": { "type": "boolean" },
+          "unreadCount": { "type": "integer" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
         }
       },
       "Error": {

@@ -9,18 +9,10 @@ import {
   starChannel,
   muteChannel,
   markChannelAsRead,
-  getPersonalChat,
-  getPersonalChatMessages,
-  sendDirectMessage,
   updateChannelSettings,
-  archivePersonalChat,
-  starPersonalChat,
-  mutePersonalChat,
-  updatePersonalChatSettings,
   leaveChannel,
   deleteChannel,
   clearChannelMessages,
-  clearPersonalChatMessages
 } from '../controllers/channelController';
 import { authenticate } from '../middleware/auth';
 
@@ -34,28 +26,6 @@ router.get('/', getChannels);
 
 // POST /api/channels
 router.post('/', createChannel);
-
-// Personal chat routes (must be before /:id to avoid conflict)
-// GET /api/channels/personal/:recipientId
-router.get('/personal/:recipientId', getPersonalChat);
-
-// POST /api/channels/personal/:recipientId - Create or get personal chat
-router.post('/personal/:recipientId', getPersonalChat);
-
-// GET /api/channels/personal/:recipientId/messages
-router.get('/personal/:recipientId/messages', getPersonalChatMessages);
-
-// POST /api/channels/personal/:recipientId/messages - Send a direct message
-router.post('/personal/:recipientId/messages', sendDirectMessage);
-
-// Personal chat settings
-router.post('/personal/:recipientId/archive', archivePersonalChat);
-router.post('/personal/:recipientId/star', starPersonalChat);
-router.post('/personal/:recipientId/mute', mutePersonalChat);
-router.patch('/personal/:recipientId/settings', updatePersonalChatSettings);
-
-// DELETE /api/channels/personal/:recipientId/messages - Clear personal chat messages
-router.delete('/personal/:recipientId/messages', clearPersonalChatMessages);
 
 // GET /api/channels/:id
 router.get('/:id', getChannelDetails);

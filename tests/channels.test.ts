@@ -256,110 +256,6 @@ describe('Channel Endpoints', () => {
     });
   });
 
-  describe('GET /api/channels/personal/:recipientId', () => {
-    it('should create and return personal chat', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      const data = await response.json() as any;
-
-      expect(response.status).toBe(200);
-      expect(data.channel).toBeDefined();
-      expect(data.channel.isGroup).toBe(false);
-      expect(data.channel.members).toBeDefined();
-      expect(data.channel.members.length).toBe(2);
-      expect(typeof data.channel.unreadCount).toBe('number');
-    });
-
-    it('should return existing personal chat on second call', async () => {
-      const response1 = await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const data1 = await response1.json() as any;
-
-      const response2 = await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const data2 = await response2.json() as any;
-
-      expect(data1.channel.id).toBe(data2.channel.id);
-    });
-
-    it('should reject creating personal chat with self', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${userId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      expect(response.status).toBe(400);
-    });
-
-    it('should reject for non-existent user', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/00000000-0000-0000-0000-000000000000`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/channels/personal/:recipientId', () => {
-    it('should create and return personal chat via POST', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      const data = await response.json() as any;
-
-      expect(response.status).toBe(200);
-      expect(data.channel).toBeDefined();
-      expect(data.channel.isGroup).toBe(false);
-      expect(data.channel.members).toBeDefined();
-      expect(data.channel.members.length).toBe(2);
-    });
-  });
-
-  describe('GET /api/channels/personal/:recipientId/messages', () => {
-    it('should return personal chat messages', async () => {
-      // First ensure personal chat exists
-      await fetch(`${baseUrl}/channels/personal/${otherUserId}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}/messages`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      const data = await response.json() as any;
-
-      expect(response.status).toBe(200);
-      expect(data.messages).toBeDefined();
-      expect(Array.isArray(data.messages)).toBe(true);
-      expect(data.pagination).toBeDefined();
-    });
-
-    it('should return 404 for non-existent personal chat', async () => {
-      // Create a new user with no personal chat
-      const signupRes = await fetch(`${baseUrl}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'New User No Chat',
-          email: `newuser-nochat-${Date.now()}@example.com`,
-          password: 'TestPass123',
-        }),
-      });
-      const newUser = await signupRes.json() as any;
-
-      const response = await fetch(`${baseUrl}/channels/personal/${newUser.user.id}/messages`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-
-      expect(response.status).toBe(404);
-    });
-  });
-
   describe('GET /api/channels - with channel settings', () => {
     it('should return channels with isArchived, isStarred, isMuted, unreadCount', async () => {
       const response = await fetch(`${baseUrl}/channels`, {
@@ -378,105 +274,19 @@ describe('Channel Endpoints', () => {
       expect(typeof channel.isMuted).toBe('boolean');
       expect(typeof channel.unreadCount).toBe('number');
     });
-  });
 
-  describe('POST /api/channels/personal/:recipientId/messages', () => {
-    it('should send a direct message and create chat if needed', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: 'Hello from test!',
-        }),
-      });
-
-      const data = await response.json() as any;
-
-      expect(response.status).toBe(201);
-      expect(data.message).toBe('Direct message sent');
-      expect(data.data).toBeDefined();
-      expect(data.data.text).toBe('Hello from test!');
-      expect(data.data.isOwn).toBe(true);
-      expect(data.data.channelId).toBeDefined();
-      expect(data.channel).toBeDefined();
-      expect(data.channel.isGroup).toBe(false);
-    });
-
-    it('should reject sending DM to self', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${userId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: 'Hello to myself',
-        }),
-      });
-
-      const data = await response.json() as any;
-
-      expect(response.status).toBe(400);
-      expect(data.error).toBe('Cannot send a message to yourself');
-    });
-
-    it('should reject empty message text', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/${otherUserId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: '',
-        }),
-      });
-
-      expect(response.status).toBe(400);
-    });
-
-    it('should reject for non-existent recipient', async () => {
-      const response = await fetch(`${baseUrl}/channels/personal/00000000-0000-0000-0000-000000000000/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: 'Hello!',
-        }),
-      });
-
-      expect(response.status).toBe(404);
-    });
-
-    it('should allow recipient to see the DM', async () => {
-      // Send a message from authToken user to otherUser
-      await fetch(`${baseUrl}/channels/personal/${otherUserId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: 'Can you see this?',
-        }),
-      });
-
-      // Check that otherUser can see the message
-      const response = await fetch(`${baseUrl}/channels/personal/${userId}/messages`, {
-        headers: { Authorization: `Bearer ${otherUserToken}` },
+    it('should only return group channels (no DMs)', async () => {
+      const response = await fetch(`${baseUrl}/channels`, {
+        headers: { Authorization: `Bearer ${authToken}` },
       });
 
       const data = await response.json() as any;
 
       expect(response.status).toBe(200);
-      expect(data.messages).toBeDefined();
-      expect(data.messages.length).toBeGreaterThan(0);
-      expect(data.messages.some((m: any) => m.text === 'Can you see this?')).toBe(true);
+      // Every channel returned should be a group channel
+      for (const channel of data.channels) {
+        expect(channel.isGroup).toBe(true);
+      }
     });
   });
 });

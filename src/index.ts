@@ -6,11 +6,13 @@ import swaggerUi from 'swagger-ui-express';
 import { connectDB } from './config/db';
 import { initializeSocket } from './socket';
 import { initializeGeneralChannel } from './utils/initializeGeneralChannel';
+import { migrateDmsFromChannels } from './utils/migrateDmsFromChannels';
 
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import channelRoutes from './routes/channels';
+import dmRoutes from './routes/dms';
 import messageRoutes from './routes/messages';
 
 // Import Swagger documentation
@@ -41,6 +43,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/channels', channelRoutes);
+app.use('/api/dms', dmRoutes);
 app.use('/api', messageRoutes); // Messages are under /api/channels/:id/messages and /api/messages/:id
 
 // Swagger documentation
@@ -72,6 +75,7 @@ const io = initializeSocket(server);
 const startServer = async (): Promise<void> => {
   await connectDB();
   await initializeGeneralChannel(); // Ensure General channel exists on startup
+  await migrateDmsFromChannels(); // Migrate existing DMs from channels (one-time, idempotent)
   return new Promise((resolve) => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);

@@ -13,7 +13,8 @@ interface PollInfo {
 
 interface MessageAttributes {
   id: string;
-  channelId: string;
+  channelId: string | null;
+  dmId: string | null;
   senderId: string;
   text: string | null;
   attachments: string[];
@@ -28,11 +29,12 @@ interface MessageAttributes {
   updatedAt?: Date;
 }
 
-interface MessageCreationAttributes extends Optional<MessageAttributes, 'id' | 'text' | 'attachments' | 'audio' | 'poll' | 'isEdited' | 'isDeleted' | 'status' | 'deliveredAt' | 'readAt'> {}
+interface MessageCreationAttributes extends Optional<MessageAttributes, 'id' | 'text' | 'attachments' | 'audio' | 'poll' | 'isEdited' | 'isDeleted' | 'status' | 'deliveredAt' | 'readAt' | 'channelId' | 'dmId'> {}
 
 class Message extends Model<MessageAttributes, MessageCreationAttributes> implements MessageAttributes {
   declare id: string;
-  declare channelId: string;
+  declare channelId: string | null;
+  declare dmId: string | null;
   declare senderId: string;
   declare text: string | null;
   declare attachments: string[];
@@ -61,7 +63,11 @@ Message.init(
     },
     channelId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
+    },
+    dmId: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
     senderId: {
       type: DataTypes.UUID,
@@ -111,6 +117,9 @@ Message.init(
     indexes: [
       {
         fields: ['channelId'],
+      },
+      {
+        fields: ['dmId'],
       },
       {
         fields: ['senderId'],
