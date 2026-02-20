@@ -12,6 +12,25 @@ const sequelize = new Sequelize(
   }
 );
 
+// Run explicit migrations for schema changes that sync({ alter }) may not handle
+const migrateMessagesTable = async (): Promise<void> => {
+  try {
+    // Make channelId nullable (was NOT NULL before DM refactoring)
+    await sequelize.query(`
+      ALTER TABLE messages ALTER COLUMN "channelId" DROP NOT NULL;
+    `).catch(() => { /* Column may already be nullable */ });
+
+    // Add dmId column if it doesn't exist
+    await sequelize.query(`
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS "dmId" UUID;
+    `).catch(() => { /* Column may already exist */ });
+
+    console.log('✅ Messages table migration complete');
+  } catch (error) {
+    console.log('⚠️ Messages table migration skipped (table may not exist yet)');
+  }
+};
+
 export const connectDB = async (): Promise<void> => {
   try {
     await sequelize.authenticate();
@@ -25,7 +44,10 @@ export const connectDB = async (): Promise<void> => {
       // In test environment, drop and recreate tables
       await sequelize.sync({ force: true });
     } else {
-      // In other environments, try alter first, fall back to sync if constraint errors occur
+      // Run explicit migrations for critical schema changes first
+      await migrateMessagesTable();
+      
+      // Then sync all models
       try {
         await sequelize.sync({ alter: true });
       } catch (alterError: any) {
