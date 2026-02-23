@@ -25,7 +25,7 @@ dotenv.config();
 const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3000;
-
+app.set("trust proxy", 1);
 // Middleware
 app.use(cors({
   origin: [process.env.FRONTEND_URL, 'http://localhost:5173'].filter(Boolean) as string[],
