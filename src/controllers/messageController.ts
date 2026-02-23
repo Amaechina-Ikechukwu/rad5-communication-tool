@@ -1,5 +1,5 @@
 import type { Response } from 'express';
-import { Message, Reaction, User, ChannelMember, Channel } from '../models';
+import { Message, Reaction, User, ChannelMember, Channel, DirectMessageMember } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary, getFileType } from '../utils/cloudinary';
 import { isWithinEditWindow } from '../utils/validators';
@@ -328,6 +328,13 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
     const { emoji } = req.body;
     const userId = req.user!.id;
 
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(messageId)) {
+      res.status(400).json({ error: 'Invalid message ID format' });
+      return;
+    }
+
     if (!emoji) {
       res.status(400).json({ error: 'Emoji is required' });
       return;
@@ -339,13 +346,25 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Check if user is in channel
-    const membership = await ChannelMember.findOne({
-      where: { channelId: message.channelId, userId },
-    });
-
-    if (!membership) {
-      res.status(403).json({ error: 'You are not a member of this channel' });
+    // Check membership based on whether message is in a channel or DM
+    if (message.channelId) {
+      const membership = await ChannelMember.findOne({
+        where: { channelId: message.channelId, userId },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You are not a member of this channel' });
+        return;
+      }
+    } else if (message.dmId) {
+      const dmMembership = await DirectMessageMember.findOne({
+        where: { dmId: message.dmId, userId },
+      });
+      if (!dmMembership) {
+        res.status(403).json({ error: 'You are not a member of this conversation' });
+        return;
+      }
+    } else {
+      res.status(400).json({ error: 'Message does not belong to a channel or DM' });
       return;
     }
 
