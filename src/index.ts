@@ -26,10 +26,24 @@ const app = express();
 const server = createServer(app);
 const PORT = process.env.PORT || 3000;
 app.set("trust proxy", 1);
+
+// Build allowed origins from env + localhost fallbacks
+const ALLOWED_ORIGINS: string[] = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
+];
+
 // Middleware
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin '${origin}' not allowed`));
+    },
     credentials: true,
   }),
 );

@@ -16,14 +16,25 @@ const userSockets: Map<string, string> = new Map(); // userId -> socketId
 const activeCalls: Map<string, { callerId: string; receiverId: string; type: 'audio' | 'video'; channelId?: string; startedAt: Date }> = new Map();
 
 export const initializeSocket = (server: HttpServer): Server => {
-const io = new Server(server, {
-  path: "/ws",
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
+  const allowedOrigins: string[] = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',
+    ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
+  ];
+
+  const io = new Server(server, {
+    path: '/ws',
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS: origin '${origin}' not allowed`));
+      },
+      methods: ['GET', 'POST'],
+      credentials: true,
+    },
+  });
 
   // Authentication middleware
   io.use(async (socket: AuthenticatedSocket, next) => {
