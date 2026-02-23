@@ -24,7 +24,7 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 app.set("trust proxy", 1);
 
 // Build allowed origins from env + localhost fallbacks
@@ -95,10 +95,10 @@ const startServer = async (): Promise<void> => {
   await initializeGeneralChannel(); // Ensure General channel exists on startup
   await migrateDmsFromChannels(); // Migrate existing DMs from channels (one-time, idempotent)
   return new Promise((resolve) => {
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📡 WebSocket available at ws://localhost:${PORT}/ws`);
-      console.log(`📋 API available at http://localhost:${PORT}/api`);
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
+      console.log(`📡 WebSocket available at /ws`);
+      console.log(`📋 API available at /api`);
       resolve();
     });
   });

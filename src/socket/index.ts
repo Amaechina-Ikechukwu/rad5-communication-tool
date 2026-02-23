@@ -34,6 +34,10 @@ export const initializeSocket = (server: HttpServer): Server => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    // Allow both transports — Cloud Run / Dokploy proxies may not support
+    // WebSocket upgrade on the first request; polling fallback keeps it working.
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
   });
 
   // Authentication middleware

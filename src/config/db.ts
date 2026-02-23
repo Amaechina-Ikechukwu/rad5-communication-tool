@@ -4,11 +4,21 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Database connection using connection string
+const useSSL = process.env.DB_SSL === 'true' || (process.env.DATABASE_URL?.includes('sslmode=require') ?? false);
+
 const sequelize = new Sequelize(
   process.env.DATABASE_URL || 'postgresql://postgres@localhost:5432/rad5_comms',
   {
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    ...(useSSL && {
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false,
+        },
+      },
+    }),
   }
 );
 
