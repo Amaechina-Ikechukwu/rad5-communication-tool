@@ -16,13 +16,14 @@ const userSockets: Map<string, string> = new Map(); // userId -> socketId
 const activeCalls: Map<string, { callerId: string; receiverId: string; type: 'audio' | 'video'; channelId?: string; startedAt: Date }> = new Map();
 
 export const initializeSocket = (server: HttpServer): Server => {
-  const io = new Server(server, {
-    cors: {
-      origin: '*',
-      methods: ['GET', 'POST'],
-    },
-    path: '/ws',
-  });
+const io = new Server(server, {
+  path: "/ws",
+  cors: {
+    origin: "https://rad5com.robinsonmarchtechnologies.com",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
 
   // Authentication middleware
   io.use(async (socket: AuthenticatedSocket, next) => {
