@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  rad5-communication-tool:
+    build: .
+    expose:
+      - "8080"
+    labels:
+      # --- Traefik WebSocket support ---
+      - "traefik.http.middlewares.rad5-ws-headers.headers.customrequestheaders.Connection=Upgrade"
+      - "traefik.http.middlewares.rad5-ws-headers.headers.customrequestheaders.Upgrade=websocket"
+      # Replace rad5-communication-tool below with the exact router name shown in
+      # Dokploy's Traefik dashboard (Providers → Docker) if it differs.
+      - "traefik.http.routers.rad5-communication-tool.middlewares=rad5-ws-headers"
