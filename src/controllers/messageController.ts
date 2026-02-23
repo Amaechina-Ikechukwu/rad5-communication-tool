@@ -3,6 +3,7 @@ import { Message, Reaction, User, ChannelMember, Channel } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary, getFileType } from '../utils/cloudinary';
 import { isWithinEditWindow } from '../utils/validators';
+import { getIO } from '../socket/io';
 
 // GET /api/channels/:channelId/messages
 export const getMessages = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -184,6 +185,17 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       readAt: fullMessage!.readAt,
     };
 
+    // Broadcast to channel via socket
+    try {
+      const io = getIO();
+      io.to(`channel:${channelId}`).emit('new_message', {
+        channelId,
+        message: formattedMessage,
+      });
+    } catch (e) {
+      console.error('Socket broadcast error (new_message):', e);
+    }
+
     res.status(201).json({
       message: 'Message sent',
       data: formattedMessage,
@@ -226,6 +238,27 @@ export const editMessage = async (req: AuthRequest, res: Response): Promise<void
 
     await message.update({ text, isEdited: true });
 
+    // Broadcast edit via socket
+    try {
+      const io = getIO();
+      if (message.channelId) {
+        io.to(`channel:${message.channelId}`).emit('message_edited', {
+          channelId: message.channelId,
+          messageId: message.id,
+          text: message.text,
+        });
+      }
+      if (message.dmId) {
+        io.to(`dm:${message.dmId}`).emit('dm_message_edited', {
+          dmId: message.dmId,
+          messageId: message.id,
+          text: message.text,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (message_edited):', e);
+    }
+
     res.json({
       message: 'Message updated',
       data: {
@@ -260,6 +293,25 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
     }
 
     await message.update({ isDeleted: true, text: null, attachments: [], audio: null });
+
+    // Broadcast delete via socket
+    try {
+      const io = getIO();
+      if (message.channelId) {
+        io.to(`channel:${message.channelId}`).emit('message_deleted', {
+          channelId: message.channelId,
+          messageId: message.id,
+        });
+      }
+      if (message.dmId) {
+        io.to(`dm:${message.dmId}`).emit('dm_message_deleted', {
+          dmId: message.dmId,
+          messageId: message.id,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (message_deleted):', e);
+    }
 
     res.json({ message: 'Message deleted' });
   } catch (error) {
@@ -302,13 +354,41 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       where: { messageId: id, userId, emoji },
     });
 
+    let action: string;
     if (existingReaction) {
       await existingReaction.destroy();
-      res.json({ message: 'Reaction removed', action: 'removed' });
+      action = 'removed';
     } else {
       await Reaction.create({ messageId, userId, emoji });
-      res.json({ message: 'Reaction added', action: 'added' });
+      action = 'added';
     }
+
+    // Broadcast reaction via socket
+    try {
+      const io = getIO();
+      if (message.channelId) {
+        io.to(`channel:${message.channelId}`).emit('reaction_update', {
+          channelId: message.channelId,
+          messageId,
+          userId,
+          emoji,
+          action,
+        });
+      }
+      if (message.dmId) {
+        io.to(`dm:${message.dmId}`).emit('dm_reaction_update', {
+          dmId: message.dmId,
+          messageId,
+          userId,
+          emoji,
+          action,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (reaction_update):', e);
+    }
+
+    res.json({ message: action === 'added' ? 'Reaction added' : 'Reaction removed', action });
   } catch (error) {
     console.error('Add reaction error:', error);
     res.status(500).json({ error: 'Failed to add reaction' });
@@ -398,6 +478,20 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
       },
     });
 
+    // Broadcast poll update via socket
+    try {
+      const io = getIO();
+      if (message.channelId) {
+        io.to(`channel:${message.channelId}`).emit('poll_update', {
+          channelId: message.channelId,
+          messageId: message.id,
+          poll: message.poll,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (poll_update):', e);
+    }
+
     res.json({
       message: 'Vote recorded',
       poll: message.poll,
@@ -453,6 +547,31 @@ export const updateMessageStatus = async (req: AuthRequest, res: Response): Prom
     }
 
     await message.update(updates);
+
+    // Broadcast status update via socket
+    try {
+      const io = getIO();
+      if (message.channelId) {
+        io.to(`channel:${message.channelId}`).emit('message_status_update', {
+          messageId: message.id,
+          channelId: message.channelId,
+          status: message.status,
+          deliveredAt: message.deliveredAt,
+          readAt: message.readAt,
+        });
+      }
+      if (message.dmId) {
+        io.to(`dm:${message.dmId}`).emit('dm_message_status_update', {
+          messageId: message.id,
+          dmId: message.dmId,
+          status: message.status,
+          deliveredAt: message.deliveredAt,
+          readAt: message.readAt,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (message_status_update):', e);
+    }
 
     res.json({
       message: 'Message status updated',

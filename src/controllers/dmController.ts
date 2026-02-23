@@ -2,6 +2,7 @@ import type { Response } from 'express';
 import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
 import { DirectMessage, DirectMessageMember, User, Message, Reaction } from '../models';
 import type { AuthRequest } from '../middleware/auth';
+import { getIO } from '../socket/io';
 
 // Helper function to find existing DM between two users
 const findExistingDm = async (userId: string, recipientId: string) => {
@@ -343,6 +344,24 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
       deliveredAt: fullMessage!.deliveredAt,
       readAt: fullMessage!.readAt,
     };
+
+    // Broadcast to DM room via socket
+    try {
+      const io = getIO();
+      io.to(`dm:${dm.id}`).emit('new_dm_message', {
+        dmId: dm.id,
+        message: { ...formattedMessage, isOwn: false },
+      });
+
+      // Also emit unread_update to the recipient's user room
+      io.to(`user:${recipientId}`).emit('unread_update', {
+        type: 'dm',
+        dmId: dm.id,
+        senderId: userId,
+      });
+    } catch (e) {
+      console.error('Socket broadcast error (new_dm_message):', e);
+    }
 
     res.status(201).json({
       message: 'Direct message sent',

@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import swaggerUi from 'swagger-ui-express';
 import { connectDB } from './config/db';
 import { initializeSocket } from './socket';
+import { setIO } from './socket/io';
 import { initializeGeneralChannel } from './utils/initializeGeneralChannel';
 import { migrateDmsFromChannels } from './utils/migrateDmsFromChannels';
 
@@ -70,6 +71,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // Initialize WebSocket
 const io = initializeSocket(server);
+setIO(io);
 
 // Start server function (exported for tests)
 const startServer = async (): Promise<void> => {
