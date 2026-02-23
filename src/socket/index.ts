@@ -19,7 +19,10 @@ export const initializeSocket = (server: HttpServer): Server => {
 const io = new Server(server, {
   path: "/ws",
   cors: {
-    origin: "https://rad5com.robinsonmarchtechnologies.com",
+    origin: [
+      "https://rad5com.robinsonmarchtechnologies.com",
+      "http://localhost:5173",
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },
