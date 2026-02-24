@@ -32,7 +32,7 @@ const ALLOWED_ORIGINS: string[] = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:5173',
-  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map(o => o.trim()) : []),
+  ...(process.env.ALLOWED ? process.env.ALLOWED.split(',').map(o => o.trim()) : []),
 ];
 
 // Middleware
