@@ -43,7 +43,9 @@
   "paths": {
     "/auth/signup": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Create a new user account",
         "description": "Register a new user with name, email, and password.",
         "requestBody": {
@@ -92,7 +94,9 @@
     },
     "/auth/login": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Login to existing account",
         "description": "Authenticate user with email and password",
         "requestBody": {
@@ -131,7 +135,9 @@
     },
     "/auth/forgot-password": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Request password reset OTP",
         "description": "Sends a 6-digit OTP code to the user's email for password reset. The OTP expires in 15 minutes. Also sends a link-based reset email as fallback. Always returns success to prevent email enumeration.",
         "requestBody": {
@@ -140,7 +146,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["email"],
+                "required": [
+                  "email"
+                ],
                 "properties": {
                   "email": {
                     "type": "string",
@@ -184,7 +192,9 @@
     },
     "/auth/verify-otp": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Verify OTP code",
         "description": "Verify the 6-digit OTP sent to the user's email during password reset. Returns a reset token on success.",
         "requestBody": {
@@ -233,7 +243,9 @@
     },
     "/auth/resend-otp": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Resend OTP code",
         "description": "Resend a new 6-digit OTP to the user's email. Always returns success to prevent email enumeration.",
         "requestBody": {
@@ -242,7 +254,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["email"],
+                "required": [
+                  "email"
+                ],
                 "properties": {
                   "email": {
                     "type": "string",
@@ -286,7 +300,9 @@
     },
     "/auth/reset-password": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Reset password with token",
         "description": "Reset user's password using the token received from OTP verification or the email link.",
         "requestBody": {
@@ -331,10 +347,16 @@
     },
     "/auth/change-password": {
       "post": {
-        "tags": ["Auth"],
+        "tags": [
+          "Auth"
+        ],
         "summary": "Change password (authenticated)",
         "description": "Change the current user's password. Requires the current password for verification.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -397,25 +419,39 @@
     },
     "/users": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get all users",
         "description": "Returns a paginated list of all users. Supports search by name.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
             "name": "page",
-            "schema": { "type": "integer", "default": 1 }
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
-            "schema": { "type": "integer", "default": 50 }
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
           },
           {
             "in": "query",
             "name": "search",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Search users by name"
           }
         ],
@@ -446,10 +482,16 @@
     },
     "/users/me": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get current user",
         "description": "Returns the authenticated user's full profile including unread message count",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Current user profile",
@@ -466,10 +508,16 @@
     },
     "/users/profile": {
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Update user profile",
         "description": "Update user's name, bio, and/or avatar image (multipart form data)",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -529,10 +577,16 @@
     },
     "/users/privacy": {
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Update privacy settings",
         "description": "Update user's privacy preferences: lastSeen visibility, profile visibility, read receipts, and typing indicators",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -568,10 +622,16 @@
     },
     "/users/notifications": {
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Update notification settings",
         "description": "Update notification preferences. All fields are optional — omitted fields retain their current values. Supports granular control over messages, groups, sounds, audio, images, videos, files, reactions, mentions, and calls.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -607,17 +667,25 @@
     },
     "/users/avatar": {
       "put": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Upload or update avatar",
         "description": "Upload a new avatar image for the current user. Accepts multipart form data with an image file.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["avatar"],
+                "required": [
+                  "avatar"
+                ],
                 "properties": {
                   "avatar": {
                     "type": "string",
@@ -664,10 +732,16 @@
         }
       },
       "delete": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Remove avatar",
         "description": "Remove the current user's avatar image",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Avatar removed",
@@ -700,16 +774,25 @@
     },
     "/users/{id}": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get user by ID",
         "description": "Returns a specific user's profile",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -738,16 +821,25 @@
     },
     "/users/{id}/avatar": {
       "get": {
-        "tags": ["Users"],
+        "tags": [
+          "Users"
+        ],
         "summary": "Get user's avatar",
         "description": "Returns a specific user's avatar URL along with their ID and name",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -790,20 +882,32 @@
     },
     "/channels": {
       "get": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Get all channels",
         "description": "Returns all group channels that the current user is a member of. Includes unread count, last message, and membership info. DMs are no longer returned here — use /dms instead.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
             "name": "page",
-            "schema": { "type": "integer", "default": 1 }
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
-            "schema": { "type": "integer", "default": 50 }
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
           }
         ],
         "responses": {
@@ -831,10 +935,16 @@
         }
       },
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Create a new channel",
         "description": "Create a new group channel. The creator is automatically added as admin.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -880,16 +990,25 @@
     },
     "/channels/personal/{recipientId}": {
       "get": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Get personal chat",
         "description": "Get or create a personal (DM) chat with the specified user",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" },
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
             "description": "The ID of the other user"
           }
         ],
@@ -917,16 +1036,25 @@
         }
       },
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Get or create personal chat",
         "description": "Get or create a personal (DM) chat with the specified user",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -945,26 +1073,41 @@
     },
     "/channels/personal/{recipientId}/messages": {
       "get": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Get personal chat messages",
         "description": "Get paginated messages from a personal chat",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "in": "query",
             "name": "page",
-            "schema": { "type": "integer", "default": 1 }
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
-            "schema": { "type": "integer", "default": 50 }
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
           }
         ],
         "responses": {
@@ -992,16 +1135,25 @@
         }
       },
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Send a direct message",
         "description": "Send a message in a personal chat. Creates the personal chat if it doesn't exist. Supports text, file attachments, audio, and polls.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1054,16 +1206,25 @@
         }
       },
       "delete": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Clear personal chat messages",
         "description": "Soft-deletes all messages sent by the current user in this personal chat. Sets text/attachments/audio/poll to null and marks as deleted.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1098,16 +1259,25 @@
     },
     "/channels/personal/{recipientId}/archive": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle archive personal chat",
         "description": "Toggle the archived status of a personal chat for the current user",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1135,16 +1305,25 @@
     },
     "/channels/personal/{recipientId}/star": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle star personal chat",
         "description": "Toggle the starred status of a personal chat",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1172,16 +1351,25 @@
     },
     "/channels/personal/{recipientId}/mute": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle mute personal chat",
         "description": "Toggle the muted status of a personal chat",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1209,16 +1397,25 @@
     },
     "/channels/personal/{recipientId}/settings": {
       "patch": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Update personal chat settings",
         "description": "Update multiple settings (archive, star, mute) for a personal chat at once",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1256,9 +1453,15 @@
                     "settings": {
                       "type": "object",
                       "properties": {
-                        "isArchived": { "type": "boolean" },
-                        "isStarred": { "type": "boolean" },
-                        "isMuted": { "type": "boolean" }
+                        "isArchived": {
+                          "type": "boolean"
+                        },
+                        "isStarred": {
+                          "type": "boolean"
+                        },
+                        "isMuted": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -1271,16 +1474,25 @@
     },
     "/channels/{id}": {
       "get": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Get channel details",
         "description": "Get detailed information about a channel including members, media, and attachments",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1317,16 +1529,25 @@
         }
       },
       "delete": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Delete a group channel",
         "description": "Permanently delete a group channel and all its data (messages, reactions, memberships). Only group admins can delete. Cannot delete personal chats this way.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1381,16 +1602,25 @@
     },
     "/channels/{id}/members": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Add a member to channel",
         "description": "Add a user as a member of the channel. Only admins can add members.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1399,7 +1629,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["userId"],
+                "required": [
+                  "userId"
+                ],
                 "properties": {
                   "userId": {
                     "type": "string",
@@ -1453,22 +1685,34 @@
     },
     "/channels/{id}/members/{memberId}": {
       "delete": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Remove a member from channel",
         "description": "Remove a user from the channel. Only admins can remove members.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "in": "path",
             "name": "memberId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" },
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
             "description": "User ID of the member to remove"
           }
         ],
@@ -1504,16 +1748,25 @@
     },
     "/channels/{id}/leave": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Leave a group channel",
         "description": "Leave a group channel. Cannot leave personal chats. If the user is the only admin, the next oldest member is promoted to admin before the user leaves.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1568,16 +1821,25 @@
     },
     "/channels/{id}/archive": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle archive channel",
         "description": "Toggle the archived status of a channel for the current user. This is a soft archive — the channel and its data are preserved.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1605,16 +1867,25 @@
     },
     "/channels/{id}/star": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle star channel",
         "description": "Toggle the starred status of a channel",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1642,16 +1913,25 @@
     },
     "/channels/{id}/mute": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Toggle mute channel",
         "description": "Toggle the muted status of a channel",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1679,16 +1959,25 @@
     },
     "/channels/{id}/read": {
       "post": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Mark channel as read",
         "description": "Mark all messages in the channel as read for the current user",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1713,16 +2002,25 @@
     },
     "/channels/{id}/settings": {
       "patch": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Update channel settings",
         "description": "Update multiple channel settings (archive, star, mute) at once",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1760,9 +2058,15 @@
                     "settings": {
                       "type": "object",
                       "properties": {
-                        "isArchived": { "type": "boolean" },
-                        "isStarred": { "type": "boolean" },
-                        "isMuted": { "type": "boolean" }
+                        "isArchived": {
+                          "type": "boolean"
+                        },
+                        "isStarred": {
+                          "type": "boolean"
+                        },
+                        "isMuted": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -1775,16 +2079,25 @@
     },
     "/channels/{id}/messages": {
       "delete": {
-        "tags": ["Channels"],
+        "tags": [
+          "Channels"
+        ],
         "summary": "Clear channel messages",
         "description": "Soft-deletes all messages sent by the current user in this channel. Sets text/attachments/audio/poll to null and marks as deleted. Also resets lastReadAt.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1819,26 +2132,41 @@
     },
     "/channels/{channelId}/messages": {
       "get": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Get channel messages",
         "description": "Get paginated messages from a channel. Includes sender info, reactions, attachments, audio, polls, and message status.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "channelId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "in": "query",
             "name": "page",
-            "schema": { "type": "integer", "default": 1 }
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
-            "schema": { "type": "integer", "default": 50 }
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
           }
         ],
         "responses": {
@@ -1876,16 +2204,25 @@
         }
       },
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Send a message",
         "description": "Send a message to a channel. Supports text, file attachments, audio/voice notes, and polls via multipart form data.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "channelId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1960,16 +2297,25 @@
     },
     "/messages/{id}": {
       "put": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Edit a message",
         "description": "Edit the text of a message. Only the message sender can edit.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -1978,7 +2324,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["text"],
+                "required": [
+                  "text"
+                ],
                 "properties": {
                   "text": {
                     "type": "string",
@@ -2028,16 +2376,25 @@
         }
       },
       "delete": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Delete a message",
         "description": "Soft-delete a message. Only the message sender can delete.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2082,16 +2439,25 @@
     },
     "/messages/{id}/reactions": {
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Add or toggle reaction",
         "description": "Add a reaction to a message or remove it if the same reaction already exists (toggle behavior)",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -2100,7 +2466,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["emoji"],
+                "required": [
+                  "emoji"
+                ],
                 "properties": {
                   "emoji": {
                     "type": "string",
@@ -2128,12 +2496,19 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "emoji": { "type": "string" },
+                          "emoji": {
+                            "type": "string"
+                          },
                           "user": {
                             "type": "object",
                             "properties": {
-                              "id": { "type": "string", "format": "uuid" },
-                              "name": { "type": "string" }
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
                             }
                           }
                         }
@@ -2149,16 +2524,25 @@
     },
     "/messages/{id}/poll/vote": {
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Vote on a poll",
         "description": "Vote on a poll option in a message. Removes any previous vote by the user (single-vote polls). The option must be one of the poll's defined options.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" },
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
             "description": "Message ID containing the poll"
           }
         ],
@@ -2189,13 +2573,18 @@
                       "properties": {
                         "options": {
                           "type": "array",
-                          "items": { "type": "string" }
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "votes": {
                           "type": "object",
                           "additionalProperties": {
                             "type": "array",
-                            "items": { "type": "string", "format": "uuid" }
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            }
                           }
                         }
                       }
@@ -2240,16 +2629,25 @@
     },
     "/messages/{id}/status": {
       "patch": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Update message status",
         "description": "Update the delivery/read status of a message. Only the recipient (not the sender) can update the status. Setting 'read' also sets deliveredAt if not already set.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -2277,10 +2675,17 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "id": { "type": "string", "format": "uuid" },
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
                         "status": {
                           "type": "string",
-                          "enum": ["sent", "delivered", "read"]
+                          "enum": [
+                            "sent",
+                            "delivered",
+                            "read"
+                          ]
                         },
                         "deliveredAt": {
                           "type": "string",
@@ -2334,17 +2739,25 @@
     },
     "/upload": {
       "post": {
-        "tags": ["Messages"],
+        "tags": [
+          "Messages"
+        ],
         "summary": "Upload a file",
         "description": "Upload a single file to Cloudinary. Returns the file URL and metadata.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": ["file"],
+                "required": [
+                  "file"
+                ],
                 "properties": {
                   "file": {
                     "type": "string",
@@ -2400,21 +2813,39 @@
     },
     "/dms": {
       "get": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "List all DM conversations",
         "description": "Returns all direct message conversations the current user is part of. Supports search by participant name and filtering.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "query",
             "name": "search",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Search DMs by participant name"
           },
           {
             "in": "query",
             "name": "filter",
-            "schema": { "type": "string", "enum": ["starred", "archived", "muted", "unread", "active", "all"] },
+            "schema": {
+              "type": "string",
+              "enum": [
+                "starred",
+                "archived",
+                "muted",
+                "unread",
+                "active",
+                "all"
+              ]
+            },
             "description": "Filter DMs by status"
           }
         ],
@@ -2428,7 +2859,9 @@
                   "properties": {
                     "dms": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                      "items": {
+                        "$ref": "#/components/schemas/DirectMessageSummary"
+                      }
                     }
                   }
                 }
@@ -2440,16 +2873,25 @@
     },
     "/dms/{recipientId}": {
       "get": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Get or create DM",
         "description": "Returns the DM conversation with the specified user, creating one if it doesn't exist.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" },
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
             "description": "User ID of the DM recipient"
           }
         ],
@@ -2461,7 +2903,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "dm": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                    "dm": {
+                      "$ref": "#/components/schemas/DirectMessageSummary"
+                    }
                   }
                 }
               }
@@ -2476,16 +2920,25 @@
         }
       },
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Create DM",
         "description": "Creates a DM conversation with the specified user (same as GET, but uses POST).",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2496,7 +2949,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "dm": { "$ref": "#/components/schemas/DirectMessageSummary" }
+                    "dm": {
+                      "$ref": "#/components/schemas/DirectMessageSummary"
+                    }
                   }
                 }
               }
@@ -2507,31 +2962,49 @@
     },
     "/dms/{recipientId}/messages": {
       "get": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Get DM messages",
         "description": "Returns paginated messages from a DM conversation.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "in": "query",
             "name": "page",
-            "schema": { "type": "integer", "default": 1 }
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
-            "schema": { "type": "integer", "default": 50 }
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
           },
           {
             "in": "query",
             "name": "before",
-            "schema": { "type": "string", "format": "date-time" },
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
             "description": "Get messages before this timestamp"
           }
         ],
@@ -2545,9 +3018,13 @@
                   "properties": {
                     "messages": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Message" }
+                      "items": {
+                        "$ref": "#/components/schemas/Message"
+                      }
                     },
-                    "pagination": { "$ref": "#/components/schemas/Pagination" }
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    }
                   }
                 }
               }
@@ -2559,16 +3036,25 @@
         }
       },
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Send a DM",
         "description": "Send a direct message to a user. Creates the DM conversation if it doesn't exist.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -2577,7 +3063,9 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["text"],
+                "required": [
+                  "text"
+                ],
                 "properties": {
                   "text": {
                     "type": "string",
@@ -2596,12 +3084,19 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "data": { "$ref": "#/components/schemas/Message" },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Message"
+                    },
                     "dm": {
                       "type": "object",
                       "properties": {
-                        "id": { "type": "string", "format": "uuid" }
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
                       }
                     }
                   }
@@ -2618,16 +3113,25 @@
         }
       },
       "delete": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Clear DM messages",
         "description": "Soft-deletes all messages you sent in this DM.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2642,16 +3146,25 @@
     },
     "/dms/{recipientId}/archive": {
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Toggle DM archive",
         "description": "Toggle the archive status of a DM conversation.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2662,8 +3175,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "isArchived": { "type": "boolean" }
+                    "message": {
+                      "type": "string"
+                    },
+                    "isArchived": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
@@ -2674,16 +3191,25 @@
     },
     "/dms/{recipientId}/star": {
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Toggle DM star",
         "description": "Toggle the starred status of a DM conversation.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2694,8 +3220,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "isStarred": { "type": "boolean" }
+                    "message": {
+                      "type": "string"
+                    },
+                    "isStarred": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
@@ -2706,16 +3236,25 @@
     },
     "/dms/{recipientId}/mute": {
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Toggle DM mute",
         "description": "Toggle the muted status of a DM conversation.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2726,8 +3265,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "isMuted": { "type": "boolean" }
+                    "message": {
+                      "type": "string"
+                    },
+                    "isMuted": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
@@ -2738,16 +3281,25 @@
     },
     "/dms/{recipientId}/read": {
       "post": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Mark DM as read",
         "description": "Mark all messages in a DM as read.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -2758,8 +3310,13 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
-                    "lastReadAt": { "type": "string", "format": "date-time" }
+                    "message": {
+                      "type": "string"
+                    },
+                    "lastReadAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
                   }
                 }
               }
@@ -2770,16 +3327,25 @@
     },
     "/dms/{recipientId}/settings": {
       "patch": {
-        "tags": ["Direct Messages"],
+        "tags": [
+          "Direct Messages"
+        ],
         "summary": "Update DM settings",
         "description": "Update archive, star, and mute settings for a DM conversation.",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "in": "path",
             "name": "recipientId",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -2789,9 +3355,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "isArchived": { "type": "boolean" },
-                  "isStarred": { "type": "boolean" },
-                  "isMuted": { "type": "boolean" }
+                  "isArchived": {
+                    "type": "boolean"
+                  },
+                  "isStarred": {
+                    "type": "boolean"
+                  },
+                  "isMuted": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
@@ -2805,13 +3377,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "message": { "type": "string" },
+                    "message": {
+                      "type": "string"
+                    },
                     "settings": {
                       "type": "object",
                       "properties": {
-                        "isArchived": { "type": "boolean" },
-                        "isStarred": { "type": "boolean" },
-                        "isMuted": { "type": "boolean" }
+                        "isArchived": {
+                          "type": "boolean"
+                        },
+                        "isStarred": {
+                          "type": "boolean"
+                        },
+                        "isMuted": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -2821,6 +3401,110 @@
           },
           "400": {
             "description": "No valid settings provided"
+          }
+        }
+      }
+    },
+    "/messages/media": {
+      "get": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Get chat media (images/video/audio)",
+        "description": "Fetch messages containing attachments or audio for a channel or DM. Pagination supported.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "channelId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "description": "ID of the channel"
+          },
+          {
+            "name": "dmId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "description": "ID of the Direct Message conversation"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Fetch media older than this timestamp"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of media messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "media": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "pagination": {
+                      "": "#/components/schemas/Pagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing channelId and dmId",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member of the channel or DM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -2838,7 +3522,11 @@
     "schemas": {
       "SignupRequest": {
         "type": "object",
-        "required": ["name", "email", "password"],
+        "required": [
+          "name",
+          "email",
+          "password"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -2862,7 +3550,10 @@
       },
       "LoginRequest": {
         "type": "object",
-        "required": ["email", "password"],
+        "required": [
+          "email",
+          "password"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -2878,7 +3569,10 @@
       },
       "VerifyOtpRequest": {
         "type": "object",
-        "required": ["email", "otp"],
+        "required": [
+          "email",
+          "otp"
+        ],
         "properties": {
           "email": {
             "type": "string",
@@ -2894,7 +3588,10 @@
       },
       "ResetPasswordRequest": {
         "type": "object",
-        "required": ["token", "newPassword"],
+        "required": [
+          "token",
+          "newPassword"
+        ],
         "properties": {
           "token": {
             "type": "string",
@@ -2911,7 +3608,10 @@
       },
       "ChangePasswordRequest": {
         "type": "object",
-        "required": ["currentPassword", "newPassword"],
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
         "properties": {
           "currentPassword": {
             "type": "string",
@@ -2929,7 +3629,9 @@
       },
       "VotePollRequest": {
         "type": "object",
-        "required": ["option"],
+        "required": [
+          "option"
+        ],
         "properties": {
           "option": {
             "type": "string",
@@ -2940,11 +3642,16 @@
       },
       "UpdateMessageStatusRequest": {
         "type": "object",
-        "required": ["status"],
+        "required": [
+          "status"
+        ],
         "properties": {
           "status": {
             "type": "string",
-            "enum": ["delivered", "read"],
+            "enum": [
+              "delivered",
+              "read"
+            ],
             "description": "The new status for the message"
           }
         }
@@ -2992,12 +3699,20 @@
           },
           "lastSeen": {
             "type": "string",
-            "enum": ["everyone", "contacts", "nobody"],
+            "enum": [
+              "everyone",
+              "contacts",
+              "nobody"
+            ],
             "default": "everyone"
           },
           "profileVisibility": {
             "type": "string",
-            "enum": ["everyone", "contacts", "nobody"],
+            "enum": [
+              "everyone",
+              "contacts",
+              "nobody"
+            ],
             "default": "everyone"
           },
           "readReceipts": {
@@ -3037,11 +3752,19 @@
         "properties": {
           "lastSeen": {
             "type": "string",
-            "enum": ["everyone", "contacts", "nobody"]
+            "enum": [
+              "everyone",
+              "contacts",
+              "nobody"
+            ]
           },
           "profileVisibility": {
             "type": "string",
-            "enum": ["everyone", "contacts", "nobody"]
+            "enum": [
+              "everyone",
+              "contacts",
+              "nobody"
+            ]
           },
           "readReceipts": {
             "type": "boolean"
@@ -3143,7 +3866,10 @@
           },
           "role": {
             "type": "string",
-            "enum": ["admin", "member"],
+            "enum": [
+              "admin",
+              "member"
+            ],
             "description": "Current user's role in the channel"
           },
           "isArchived": {
@@ -3194,7 +3920,10 @@
             "properties": {
               "role": {
                 "type": "string",
-                "enum": ["admin", "member"]
+                "enum": [
+                  "admin",
+                  "member"
+                ]
               }
             }
           }
@@ -3250,7 +3979,9 @@
       },
       "CreateChannelRequest": {
         "type": "object",
-        "required": ["name"],
+        "required": [
+          "name"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -3317,7 +4048,11 @@
           },
           "status": {
             "type": "string",
-            "enum": ["sent", "delivered", "read"],
+            "enum": [
+              "sent",
+              "delivered",
+              "read"
+            ],
             "description": "Message delivery status"
           },
           "deliveredAt": {
@@ -3423,36 +4158,89 @@
       "DirectMessageSummary": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "participant": {
             "type": "object",
             "nullable": true,
             "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "name": { "type": "string" },
-              "avatar": { "type": "string", "format": "uri", "nullable": true },
-              "isOnline": { "type": "boolean" },
-              "lastActive": { "type": "string", "format": "date-time", "nullable": true }
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "avatar": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true
+              },
+              "isOnline": {
+                "type": "boolean"
+              },
+              "lastActive": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
             }
           },
           "lastMessage": {
             "type": "object",
             "nullable": true,
             "properties": {
-              "id": { "type": "string", "format": "uuid" },
-              "text": { "type": "string", "nullable": true },
-              "senderId": { "type": "string", "format": "uuid" },
-              "senderName": { "type": "string" },
-              "time": { "type": "string", "format": "date-time" },
-              "status": { "type": "string", "enum": ["sent", "delivered", "read"] }
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "text": {
+                "type": "string",
+                "nullable": true
+              },
+              "senderId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "senderName": {
+                "type": "string"
+              },
+              "time": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "sent",
+                  "delivered",
+                  "read"
+                ]
+              }
             }
           },
-          "isArchived": { "type": "boolean" },
-          "isStarred": { "type": "boolean" },
-          "isMuted": { "type": "boolean" },
-          "unreadCount": { "type": "integer" },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "updatedAt": { "type": "string", "format": "date-time" }
+          "isArchived": {
+            "type": "boolean"
+          },
+          "isStarred": {
+            "type": "boolean"
+          },
+          "isMuted": {
+            "type": "boolean"
+          },
+          "unreadCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       },
       "Error": {
