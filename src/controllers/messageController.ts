@@ -1,4 +1,5 @@
 import type { Response } from 'express';
+import { Op, literal } from 'sequelize';
 import { Message, Reaction, User, ChannelMember, Channel, DirectMessageMember } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary, getFileType } from '../utils/cloudinary';
@@ -604,5 +605,74 @@ export const updateMessageStatus = async (req: AuthRequest, res: Response): Prom
   } catch (error) {
     console.error('Update message status error:', error);
     res.status(500).json({ error: 'Failed to update message status' });
+  }
+};
+
+// GET /api/channels/:channelId/media
+export const getChannelMedia = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { channelId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+    const userId = req.user!.id;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    // Verify membership
+    const membership = await ChannelMember.findOne({
+      where: { channelId, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this channel' });
+      return;
+    }
+
+    const whereClause: any = {
+      channelId,
+      isDeleted: false,
+      [Op.or]: [
+        { audio: { [Op.not]: null } },
+        literal("json_typeof(attachments) = 'array' AND json_array_length(attachments) > 0")
+      ],
+    };
+
+    // Respect clearedAt - only show media after the user cleared the chat
+    if (membership.clearedAt) {
+      whereClause.createdAt = { [Op.gt]: membership.clearedAt };
+    }
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+      ],
+      limit: Number(limit),
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    const formattedMedia = messages.map((msg: any) => ({
+      id: msg.id,
+      sender: msg.sender,
+      time: msg.createdAt,
+      attachments: msg.attachments,
+      audio: msg.audio,
+    }));
+
+    res.json({
+      media: formattedMedia,
+      pagination: {
+        total: count,
+        page: Number(page),
+        limit: Number(limit),
+        hasMore: offset + messages.length < count,
+      },
+    });
+  } catch (error) {
+    console.error('Get channel media error:', error);
+    res.status(500).json({ error: 'Failed to fetch channel media' });
   }
 };

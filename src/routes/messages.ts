@@ -7,7 +7,8 @@ import {
   addReaction,
   uploadFile,
   votePoll,
-  updateMessageStatus
+  updateMessageStatus,
+  getChannelMedia
 } from '../controllers/messageController';
 import { authenticate } from '../middleware/auth';
 import { uploadMessageFiles, uploadAttachments } from '../middleware/upload';
@@ -20,6 +21,9 @@ router.use(authenticate);
 
 // GET /api/channels/:channelId/messages
 router.get('/channels/:channelId/messages', getMessages);
+
+// GET /api/channels/:channelId/media
+router.get('/channels/:channelId/media', getChannelMedia);
 
 // POST /api/channels/:channelId/messages (with file uploads)
 router.post('/channels/:channelId/messages', uploadMessageFiles, sendMessage);

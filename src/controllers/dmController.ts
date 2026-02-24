@@ -1,5 +1,5 @@
 import type { Response } from 'express';
-import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
+import { Op, fn, col, literal, where as sequelizeWhere } from 'sequelize';
 import { DirectMessage, DirectMessageMember, User, Message, Reaction } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { getIO } from '../socket/io';
@@ -681,5 +681,81 @@ export const clearDmMessages = async (req: AuthRequest, res: Response): Promise<
   } catch (error) {
     console.error('Clear DM messages error:', error);
     res.status(500).json({ error: 'Failed to clear messages' });
+  }
+};
+
+// GET /api/dms/:recipientId/media - Get DM media
+export const getDMMedia = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { recipientId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
+    const userId = req.user!.id;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    // Find DM by DM ID or recipient user ID
+    const dm = await findDmByIdOrRecipient(userId, recipientId);
+
+    if (!dm) {
+      res.status(404).json({ error: 'DM conversation not found' });
+      return;
+    }
+
+    const membership = await DirectMessageMember.findOne({
+      where: { dmId: dm.id, userId },
+    });
+
+    if (!membership) {
+      res.status(403).json({ error: 'You are not a member of this DM' });
+      return;
+    }
+
+    const whereClause: any = {
+      dmId: dm.id,
+      isDeleted: false,
+      [Op.or]: [
+        { audio: { [Op.not]: null } },
+        literal("json_typeof(attachments) = 'array' AND json_array_length(attachments) > 0")
+      ],
+    };
+
+    // Respect clearedAt - only show media after the user cleared the chat
+    if (membership.clearedAt) {
+      whereClause.createdAt = { [Op.gt]: membership.clearedAt };
+    }
+
+    const { count, rows: messages } = await Message.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+      ],
+      limit: Number(limit),
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    const formattedMedia = messages.map((msg: any) => ({
+      id: msg.id,
+      sender: msg.sender,
+      time: msg.createdAt,
+      attachments: msg.attachments,
+      audio: msg.audio,
+    }));
+
+    res.json({
+      media: formattedMedia,
+      pagination: {
+        total: count,
+        page: Number(page),
+        limit: Number(limit),
+        hasMore: offset + messages.length < count,
+      },
+    });
+  } catch (error) {
+    console.error('Get DM media error:', error);
+    res.status(500).json({ error: 'Failed to fetch DM media' });
   }
 };

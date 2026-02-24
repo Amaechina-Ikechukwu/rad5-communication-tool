@@ -10,6 +10,7 @@ import {
   updateDmSettings,
   markDmAsRead,
   clearDmMessages,
+  getDMMedia,
 } from '../controllers/dmController';
 import { authenticate } from '../middleware/auth';
 
@@ -29,6 +30,9 @@ router.post('/:recipientId', getOrCreateDm);
 
 // GET /api/dms/:recipientId/messages - Get DM messages
 router.get('/:recipientId/messages', getDmMessages);
+
+// GET /api/dms/:recipientId/media - Get DM media
+router.get('/:recipientId/media', getDMMedia);
 
 // POST /api/dms/:recipientId/messages - Send a DM
 router.post('/:recipientId/messages', sendDm);
