@@ -13,6 +13,7 @@ import {
   getDMMedia,
 } from '../controllers/dmController';
 import { authenticate } from '../middleware/auth';
+import { uploadMessageFiles } from '../middleware/upload';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.get('/:recipientId/messages', getDmMessages);
 router.get('/:recipientId/media', getDMMedia);
 
 // POST /api/dms/:recipientId/messages - Send a DM
-router.post('/:recipientId/messages', sendDm);
+router.post('/:recipientId/messages', uploadMessageFiles, sendDm);
 
 // POST /api/dms/:recipientId/archive - Toggle archive
 router.post('/:recipientId/archive', archiveDm);

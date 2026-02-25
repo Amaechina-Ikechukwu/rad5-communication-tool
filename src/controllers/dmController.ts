@@ -3,6 +3,7 @@ import { Op, fn, col, literal, where as sequelizeWhere } from 'sequelize';
 import { DirectMessage, DirectMessageMember, User, Message, Reaction } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { getIO } from '../socket/io';
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 // Helper function to find existing DM between two users
 const findExistingDm = async (userId: string, recipientId: string) => {
@@ -268,28 +269,30 @@ export const getOrCreateDm = async (req: AuthRequest, res: Response): Promise<vo
 export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { recipientId } = req.params;
-    const { text } = req.body;
+    const { text, poll } = req.body;
     const userId = req.user!.id;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
     if (recipientId === userId) {
       res.status(400).json({ error: 'Cannot send a message to yourself' });
       return;
     }
 
-    if (!text || typeof text !== 'string' || !text.trim()) {
-      res.status(400).json({ error: 'Message text is required' });
+    // Must have at least text, attachments, audio, or poll
+    if (!text && !files?.attachments?.length && !files?.audio?.length && !poll) {
+      res.status(400).json({ error: 'Message must have content' });
       return;
     }
 
     // Check if recipient exists
-    const recipient = await User.findByPk(recipientId);
+    const recipient = await User.findByPk(recipientId as string);
     if (!recipient) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
 
     // Find or create DM
-    let dm = await findExistingDm(userId, recipientId);
+    let dm = await findExistingDm(userId, recipientId as string);
 
     if (!dm) {
       dm = await DirectMessage.create({
@@ -303,17 +306,52 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
         }),
         DirectMessageMember.create({
           dmId: dm.id,
-          userId: recipientId,
+          userId: recipientId as string,
         }),
       ]);
     }
 
-    // Create the message
-    const message = await Message.create({
+    const messageData: any = {
       dmId: dm.id,
       senderId: userId,
-      text: text.trim(),
-    });
+      text: text ? text.trim() : null,
+    };
+
+    // Upload attachments
+    if (files?.attachments?.length) {
+      const uploadPromises = files.attachments.map((file) =>
+        uploadToCloudinary(file.buffer, 'attachments', 'auto')
+      );
+      const results = await Promise.all(uploadPromises);
+      messageData.attachments = results.map((r) => r.url);
+    }
+
+    // Upload audio
+    if (files?.audio?.length) {
+      const audioResult = await uploadToCloudinary(files.audio[0].buffer, 'audio', 'video');
+      messageData.audio = {
+        url: audioResult.url,
+        duration: req.body.audioDuration || '0:00',
+      };
+    }
+
+    // Handle poll
+    if (poll) {
+      try {
+        const pollData = typeof poll === 'string' ? JSON.parse(poll) : poll;
+        if (pollData.options && Array.isArray(pollData.options)) {
+          messageData.poll = {
+            options: pollData.options,
+            votes: {},
+          };
+        }
+      } catch (e) {
+        // Invalid poll data, ignore
+      }
+    }
+
+    // Create the message
+    const message = await Message.create(messageData);
 
     // Fetch with sender info
     const fullMessage = await Message.findByPk(message.id, {
