@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { waitForServer, stopTestServer, baseUrl } from './setup';
+import { Message } from '../src/models';
 
 let authToken: string;
+let userId: string;
 let channelId: string;
 let messageId: string;
 
 beforeAll(async () => {
   await waitForServer();
   
-  // Create user
   const signupRes = await fetch(`${baseUrl}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,8 +22,8 @@ beforeAll(async () => {
 
   const userData = await signupRes.json() as any;
   authToken = userData.token;
+  userId = userData.user.id;
 
-  // Create channel
   const channelRes = await fetch(`${baseUrl}/channels`, {
     method: 'POST',
     headers: {
@@ -94,6 +95,66 @@ describe('Message Endpoints', () => {
       expect(Array.isArray(data.messages)).toBe(true);
       expect(data.pagination).toBeDefined();
     });
+
+    it('should return rich attachment metadata in message and media payloads', async () => {
+      const seededMessage = await Message.create({
+        channelId,
+        senderId: userId,
+        text: 'Attachment metadata seed',
+        attachments: [
+          {
+            name: 'photo.jpg',
+            url: 'https://example.com/photo.jpg',
+            type: 'image',
+            mimeType: 'image/jpeg',
+            size: 2048,
+            duration: null,
+            thumbnailUrl: 'https://example.com/photo.jpg',
+          },
+          {
+            name: 'spec.pdf',
+            url: 'https://example.com/spec.pdf',
+            type: 'file',
+            mimeType: 'application/pdf',
+            size: 4096,
+            duration: null,
+            thumbnailUrl: null,
+          },
+        ],
+        audio: {
+          name: 'note.webm',
+          url: 'https://example.com/note.webm',
+          type: 'audio',
+          mimeType: 'audio/webm',
+          size: 1024,
+          duration: 14,
+          thumbnailUrl: null,
+        },
+      } as any);
+
+      const messagesResponse = await fetch(`${baseUrl}/channels/${channelId}/messages`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const messagesData = await messagesResponse.json() as any;
+      const targetMessage = messagesData.messages.find((item: any) => item.id === seededMessage.id);
+
+      expect(messagesResponse.status).toBe(200);
+      expect(targetMessage.attachments[0].mimeType).toBe('image/jpeg');
+      expect(targetMessage.attachments[1].type).toBe('file');
+      expect(targetMessage.audio.duration).toBe(14);
+      expect(targetMessage.hasImage).toBe(true);
+      expect(targetMessage.hasAudio).toBe(true);
+
+      const mediaResponse = await fetch(`${baseUrl}/channels/${channelId}/media`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const mediaData = await mediaResponse.json() as any;
+      const mediaMessage = mediaData.media.find((item: any) => item.id === seededMessage.id);
+
+      expect(mediaResponse.status).toBe(200);
+      expect(mediaMessage.attachments[0].thumbnailUrl).toBe('https://example.com/photo.jpg');
+      expect(mediaMessage.audio.mimeType).toBe('audio/webm');
+    });
   });
 
   describe('PUT /api/messages/:id', () => {
@@ -157,7 +218,6 @@ describe('Message Endpoints', () => {
 
   describe('DELETE /api/messages/:id', () => {
     it('should delete message within 20 min window', async () => {
-      // First create a new message to delete
       const createRes = await fetch(`${baseUrl}/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {

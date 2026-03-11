@@ -1,20 +1,45 @@
 import type { Response } from 'express';
 import { Op, literal } from 'sequelize';
-import { Message, Reaction, User, ChannelMember, Channel, DirectMessageMember } from '../models';
+import { Message, Reaction, User, ChannelMember, DirectMessageMember } from '../models';
 import type { AuthRequest } from '../middleware/auth';
-import { uploadToCloudinary, getFileType } from '../utils/cloudinary';
+import { uploadToCloudinary } from '../utils/cloudinary';
 import { isWithinEditWindow } from '../utils/validators';
 import { getIO } from '../socket/io';
+import {
+  buildAttachmentFromUpload,
+  formatMessagePayload,
+  formatMediaPayload,
+  normalizePoll,
+  parseDurationSeconds,
+} from '../utils/messagePayload';
+import { countChannelUnread } from '../utils/unread';
+
+const getUploadResourceType = (mimeType: string): 'image' | 'video' | 'raw' | 'auto' => {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('audio/') || mimeType.startsWith('video/')) return 'video';
+  return 'auto';
+};
+
+const buildPollPayload = (value: unknown) => {
+  const normalizedPoll = normalizePoll(value);
+  if (!normalizedPoll) {
+    return null;
+  }
+
+  return {
+    options: normalizedPoll.options,
+    votes: Object.fromEntries(normalizedPoll.options.map((option) => [option, []])),
+  };
+};
 
 // GET /api/channels/:channelId/messages
 export const getMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { channelId } = req.params;
+    const channelId = String(req.params.channelId);
     const { page = 1, limit = 50, before } = req.query;
     const userId = req.user!.id;
     const offset = (Number(page) - 1) * Number(limit);
 
-    // Verify membership
     const membership = await ChannelMember.findOne({
       where: { channelId, userId },
     });
@@ -26,13 +51,12 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
 
     const whereClause: any = { channelId, isDeleted: false };
 
-    // Respect clearedAt - only show messages after the user cleared the chat
     if (membership.clearedAt) {
-      whereClause.createdAt = { ...(whereClause.createdAt || {}), [require('sequelize').Op.gt]: membership.clearedAt };
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [Op.gt]: membership.clearedAt };
     }
 
     if (before) {
-      whereClause.createdAt = { ...(whereClause.createdAt || {}), [require('sequelize').Op.lt]: new Date(before as string) };
+      whereClause.createdAt = { ...(whereClause.createdAt || {}), [Op.lt]: new Date(before as string) };
     }
 
     const { count, rows: messages } = await Message.findAndCountAll({
@@ -60,28 +84,10 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       order: [['createdAt', 'DESC']],
     });
 
-    // Format messages
-    const formattedMessages = messages.map((msg: any) => ({
-      id: msg.id,
-      sender: msg.sender,
-      text: msg.text,
-      time: msg.createdAt,
-      isOwn: msg.senderId === userId,
-      isEdited: msg.isEdited,
-      reactions: msg.reactions.map((r: any) => ({
-        emoji: r.emoji,
-        user: r.user,
-      })),
-      attachments: msg.attachments,
-      audio: msg.audio,
-      poll: msg.poll,
-      status: msg.status,
-      deliveredAt: msg.deliveredAt,
-      readAt: msg.readAt,
-    }));
+    const formattedMessages = messages.map((msg: any) => formatMessagePayload(msg, userId));
 
     res.json({
-      messages: formattedMessages.reverse(), // Oldest first
+      messages: formattedMessages.reverse(),
       pagination: {
         total: count,
         page: Number(page),
@@ -98,12 +104,11 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
 // POST /api/channels/:channelId/messages
 export const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { channelId } = req.params;
+    const channelId = String(req.params.channelId);
     const { text, poll } = req.body;
     const userId = req.user!.id;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
-    // Verify membership
     const membership = await ChannelMember.findOne({
       where: { channelId, userId },
     });
@@ -113,7 +118,6 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Must have at least text, attachments, audio, or poll
     if (!text && !files?.attachments?.length && !files?.audio?.length && !poll) {
       res.status(400).json({ error: 'Message must have content' });
       return;
@@ -122,45 +126,49 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     const messageData: any = {
       channelId,
       senderId: userId,
-      text: text || null,
+      text: text ? String(text).trim() : null,
     };
 
-    // Upload attachments
     if (files?.attachments?.length) {
-      const uploadPromises = files.attachments.map((file) =>
-        uploadToCloudinary(file.buffer, 'attachments', 'auto')
+      const attachmentUploads = await Promise.all(
+        files.attachments.map(async (file) => {
+          const uploadResult = await uploadToCloudinary(
+            file.buffer,
+            'attachments',
+            getUploadResourceType(file.mimetype)
+          );
+          return buildAttachmentFromUpload(file, uploadResult);
+        })
       );
-      const results = await Promise.all(uploadPromises);
-      messageData.attachments = results.map((r) => r.url);
+      messageData.attachments = attachmentUploads;
     }
 
-    // Upload audio
     if (files?.audio?.length) {
-      const audioResult = await uploadToCloudinary(files.audio[0].buffer, 'audio', 'video');
-      messageData.audio = {
-        url: audioResult.url,
-        duration: req.body.audioDuration || '0:00',
-      };
+      const audioFile = files.audio[0]!;
+      const uploadResult = await uploadToCloudinary(audioFile.buffer, 'audio', 'video');
+      messageData.audio = buildAttachmentFromUpload(audioFile, uploadResult, {
+        type: 'audio',
+        duration:
+          parseDurationSeconds(req.body.audioDuration) ??
+          parseDurationSeconds(uploadResult.duration),
+        thumbnailUrl: null,
+      });
     }
 
-    // Handle poll
     if (poll) {
       try {
         const pollData = typeof poll === 'string' ? JSON.parse(poll) : poll;
-        if (pollData.options && Array.isArray(pollData.options)) {
-          messageData.poll = {
-            options: pollData.options,
-            votes: {},
-          };
+        const pollPayload = buildPollPayload(pollData);
+        if (pollPayload) {
+          messageData.poll = pollPayload;
         }
-      } catch (e) {
-        // Invalid poll data, ignore
+      } catch {
+        // Ignore invalid poll payloads to match the existing permissive behavior.
       }
     }
 
     const message = await Message.create(messageData);
 
-    // Fetch with sender
     const fullMessage = await Message.findByPk(message.id, {
       include: [
         {
@@ -171,28 +179,42 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       ],
     });
 
-    const formattedMessage = {
-      id: fullMessage!.id,
-      sender: (fullMessage as any).sender,
-      text: fullMessage!.text,
-      time: fullMessage!.createdAt,
-      isOwn: true,
-      reactions: [],
-      attachments: fullMessage!.attachments,
-      audio: fullMessage!.audio,
-      poll: fullMessage!.poll,
-      status: fullMessage!.status,
-      deliveredAt: fullMessage!.deliveredAt,
-      readAt: fullMessage!.readAt,
-    };
+    const formattedMessage = formatMessagePayload(fullMessage, userId);
 
-    // Broadcast to channel via socket
     try {
       const io = getIO();
       io.to(`channel:${channelId}`).emit('new_message', {
         channelId,
         message: formattedMessage,
       });
+
+      const members = await ChannelMember.findAll({
+        where: { channelId },
+        attributes: ['userId', 'lastReadAt', 'clearedAt'],
+      });
+
+      await Promise.all(
+        members.map(async (member: any) => {
+          if (member.userId === userId) {
+            return;
+          }
+
+          const unreadCount = await countChannelUnread({
+            channelId,
+            userId: member.userId,
+            lastReadAt: member.lastReadAt,
+            clearedAt: member.clearedAt,
+          });
+
+          io.to(`user:${member.userId}`).emit('unread_update', {
+            type: 'channel',
+            channelId,
+            senderId: userId,
+            messageId: fullMessage!.id,
+            unreadCount,
+          });
+        })
+      );
     } catch (e) {
       console.error('Socket broadcast error (new_message):', e);
     }
@@ -239,7 +261,6 @@ export const editMessage = async (req: AuthRequest, res: Response): Promise<void
 
     await message.update({ text, isEdited: true });
 
-    // Broadcast edit via socket
     try {
       const io = getIO();
       if (message.channelId) {
@@ -293,9 +314,8 @@ export const deleteMessage = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    await message.update({ isDeleted: true, text: null, attachments: [], audio: null });
+    await message.update({ isDeleted: true, text: null, attachments: [], audio: null, poll: null });
 
-    // Broadcast delete via socket
     try {
       const io = getIO();
       if (message.channelId) {
@@ -329,7 +349,6 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
     const { emoji } = req.body;
     const userId = req.user!.id;
 
-    // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(messageId)) {
       res.status(400).json({ error: 'Invalid message ID format' });
@@ -347,7 +366,6 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Check membership based on whether message is in a channel or DM
     if (message.channelId) {
       const membership = await ChannelMember.findOne({
         where: { channelId: message.channelId, userId },
@@ -369,7 +387,6 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Toggle reaction (add or remove)
     const existingReaction = await Reaction.findOne({
       where: { messageId: id, userId, emoji },
     });
@@ -383,7 +400,6 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
       action = 'added';
     }
 
-    // Broadcast reaction via socket
     try {
       const io = getIO();
       if (message.channelId) {
@@ -415,7 +431,7 @@ export const addReaction = async (req: AuthRequest, res: Response): Promise<void
   }
 };
 
-// POST /api/upload
+// POST /api/messages/upload
 export const uploadFile = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const file = req.file;
@@ -425,13 +441,25 @@ export const uploadFile = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    const result = await uploadToCloudinary(file.buffer, 'uploads', 'auto');
-    const fileType = getFileType(file.mimetype);
+    const uploadResult = await uploadToCloudinary(file.buffer, 'uploads', getUploadResourceType(file.mimetype));
+    const attachment = buildAttachmentFromUpload(file, uploadResult, {
+      type: file.mimetype.startsWith('audio/') ? 'audio' : undefined,
+      duration:
+        parseDurationSeconds(req.body.duration) ??
+        parseDurationSeconds(req.body.audioDuration) ??
+        parseDurationSeconds(uploadResult.duration),
+      thumbnailUrl: file.mimetype.startsWith('audio/') ? null : undefined,
+    });
 
-    res.json({
-      url: result.url,
-      type: fileType,
-      originalName: file.originalname,
+    res.status(201).json({
+      attachment,
+      url: attachment.url,
+      type: attachment.type,
+      originalName: attachment.name,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      duration: attachment.duration,
+      thumbnailUrl: attachment.thumbnailUrl,
     });
   } catch (error) {
     console.error('Upload file error:', error);
@@ -439,7 +467,7 @@ export const uploadFile = async (req: AuthRequest, res: Response): Promise<void>
   }
 };
 
-// POST /api/messages/:id/poll/vote - Vote on a poll
+// POST /api/messages/:id/poll/vote
 export const votePoll = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -463,14 +491,22 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    // Verify membership
-    const membership = await ChannelMember.findOne({
-      where: { channelId: message.channelId, userId },
-    });
-
-    if (!membership) {
-      res.status(403).json({ error: 'You are not a member of this channel' });
-      return;
+    if (message.channelId) {
+      const membership = await ChannelMember.findOne({
+        where: { channelId: message.channelId, userId },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You are not a member of this channel' });
+        return;
+      }
+    } else if (message.dmId) {
+      const membership = await DirectMessageMember.findOne({
+        where: { dmId: message.dmId, userId },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You are not a member of this conversation' });
+        return;
+      }
     }
 
     if (!message.poll.options.includes(option)) {
@@ -479,34 +515,35 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
     }
 
     const votes = { ...message.poll.votes };
-
-    // Remove previous vote from all options
-    for (const opt of Object.keys(votes)) {
-      votes[opt] = (votes[opt] || []).filter((uid: string) => uid !== userId);
+    for (const pollOption of message.poll.options) {
+      const currentVotes = Array.isArray(votes[pollOption]) ? votes[pollOption] : [];
+      votes[pollOption] = currentVotes.filter((voterId: string) => voterId !== userId);
     }
 
-    // Add vote to the chosen option
-    if (!votes[option]) {
-      votes[option] = [];
-    }
-    votes[option].push(userId);
+    votes[option] = [...(votes[option] || []), userId];
 
-    await message.update({
-      poll: {
-        options: message.poll.options,
-        votes,
-      },
-    });
+    const updatedPoll = {
+      options: message.poll.options,
+      votes,
+    };
 
-    // Broadcast poll update via socket
+    await message.update({ poll: updatedPoll });
+
     try {
       const io = getIO();
+      const payload = {
+        messageId: message.id,
+        ...(message.channelId ? { channelId: message.channelId } : {}),
+        ...(message.dmId ? { dmId: message.dmId } : {}),
+        poll: updatedPoll,
+      };
+
       if (message.channelId) {
-        io.to(`channel:${message.channelId}`).emit('poll_update', {
-          channelId: message.channelId,
-          messageId: message.id,
-          poll: message.poll,
-        });
+        io.to(`channel:${message.channelId}`).emit('poll_update', payload);
+      }
+      if (message.dmId) {
+        io.to(`dm:${message.dmId}`).emit('poll_update', payload);
+        io.to(`dm:${message.dmId}`).emit('dm_poll_update', payload);
       }
     } catch (e) {
       console.error('Socket broadcast error (poll_update):', e);
@@ -514,7 +551,7 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
 
     res.json({
       message: 'Vote recorded',
-      poll: message.poll,
+      poll: updatedPoll,
     });
   } catch (error) {
     console.error('Vote poll error:', error);
@@ -522,7 +559,7 @@ export const votePoll = async (req: AuthRequest, res: Response): Promise<void> =
   }
 };
 
-// PATCH /api/messages/:id/status - Update message delivery/read status
+// PATCH /api/messages/:id/status
 export const updateMessageStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -541,20 +578,29 @@ export const updateMessageStatus = async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    // Only the recipient can update the status (not the sender)
     if (message.senderId === userId) {
       res.status(400).json({ error: 'Cannot update status of your own message' });
       return;
     }
 
-    // Verify membership
-    const membership = await ChannelMember.findOne({
-      where: { channelId: message.channelId, userId },
-    });
+    if (message.channelId) {
+      const membership = await ChannelMember.findOne({
+        where: { channelId: message.channelId, userId },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You are not a member of this channel' });
+        return;
+      }
+    }
 
-    if (!membership) {
-      res.status(403).json({ error: 'You are not a member of this channel' });
-      return;
+    if (message.dmId) {
+      const membership = await DirectMessageMember.findOne({
+        where: { dmId: message.dmId, userId },
+      });
+      if (!membership) {
+        res.status(403).json({ error: 'You are not a member of this conversation' });
+        return;
+      }
     }
 
     const updates: any = { status };
@@ -568,7 +614,6 @@ export const updateMessageStatus = async (req: AuthRequest, res: Response): Prom
 
     await message.update(updates);
 
-    // Broadcast status update via socket
     try {
       const io = getIO();
       if (message.channelId) {
@@ -611,12 +656,11 @@ export const updateMessageStatus = async (req: AuthRequest, res: Response): Prom
 // GET /api/channels/:channelId/media
 export const getChannelMedia = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { channelId } = req.params;
+    const channelId = String(req.params.channelId);
     const { page = 1, limit = 50 } = req.query;
     const userId = req.user!.id;
     const offset = (Number(page) - 1) * Number(limit);
 
-    // Verify membership
     const membership = await ChannelMember.findOne({
       where: { channelId, userId },
     });
@@ -635,7 +679,6 @@ export const getChannelMedia = async (req: AuthRequest, res: Response): Promise<
       ],
     };
 
-    // Respect clearedAt - only show media after the user cleared the chat
     if (membership.clearedAt) {
       whereClause.createdAt = { [Op.gt]: membership.clearedAt };
     }
@@ -654,13 +697,7 @@ export const getChannelMedia = async (req: AuthRequest, res: Response): Promise<
       order: [['createdAt', 'DESC']],
     });
 
-    const formattedMedia = messages.map((msg: any) => ({
-      id: msg.id,
-      sender: msg.sender,
-      time: msg.createdAt,
-      attachments: msg.attachments,
-      audio: msg.audio,
-    }));
+    const formattedMedia = messages.map((msg: any) => formatMediaPayload(msg, userId));
 
     res.json({
       media: formattedMedia,

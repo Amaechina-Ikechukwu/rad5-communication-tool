@@ -4,6 +4,14 @@ import { DirectMessage, DirectMessageMember, User, Message, Reaction } from '../
 import type { AuthRequest } from '../middleware/auth';
 import { getIO } from '../socket/io';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import {
+  buildAttachmentFromUpload,
+  formatMessagePayload,
+  formatMediaPayload,
+  normalizePoll,
+  parseDurationSeconds,
+} from '../utils/messagePayload';
+import { countDmUnread, getLatestReadBoundary } from '../utils/unread';
 
 // Helper function to find existing DM between two users
 const findExistingDm = async (userId: string, recipientId: string) => {
@@ -45,6 +53,73 @@ const findDmByIdOrRecipient = async (userId: string, idOrRecipient: string) => {
   return findExistingDm(userId, idOrRecipient);
 };
 
+const buildRealtimeDmForUser = async (dmId: string, userId: string) => {
+  const membership = await DirectMessageMember.findOne({
+    where: { dmId, userId },
+    include: [
+      {
+        model: DirectMessage,
+        as: 'directMessage',
+        include: [
+          {
+            model: User,
+            as: 'participants',
+            attributes: ['id', 'name', 'avatar', 'isOnline', 'lastActive'],
+            through: { attributes: [] },
+          },
+        ],
+      },
+    ],
+  });
+
+  const dm = (membership as any)?.directMessage;
+  if (!membership || !dm) {
+    return null;
+  }
+
+  const unreadCount = await countDmUnread({
+    dmId,
+    userId,
+    lastReadAt: membership.lastReadAt,
+    clearedAt: membership.clearedAt,
+  });
+
+  const lastMessage = await Message.findOne({
+    where: { dmId, isDeleted: false },
+    order: [['createdAt', 'DESC']],
+    include: [
+      {
+        model: User,
+        as: 'sender',
+        attributes: ['id', 'name'],
+      },
+    ],
+  });
+
+  const otherParticipant = dm.participants.find((participant: any) => participant.id !== userId);
+
+  return {
+    id: dm.id,
+    participant: otherParticipant || null,
+    participants: dm.participants,
+    lastMessage: lastMessage
+      ? {
+          id: lastMessage.id,
+          text: lastMessage.text,
+          senderId: lastMessage.senderId,
+          senderName: (lastMessage as any).sender?.name,
+          time: lastMessage.createdAt,
+          status: lastMessage.status,
+        }
+      : null,
+    isArchived: membership.isArchived,
+    isStarred: membership.isStarred,
+    isMuted: membership.isMuted,
+    unreadCount,
+    createdAt: dm.createdAt,
+    updatedAt: dm.updatedAt,
+  };
+};
 // GET /api/dms - List all DM conversations
 export const getDms = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -76,14 +151,11 @@ export const getDms = async (req: AuthRequest, res: Response): Promise<void> => 
         const dm = m.directMessage;
         if (!dm) return null;
 
-        const unreadCount = await Message.count({
-          where: {
-            dmId: dm.id,
-            isDeleted: false,
-            senderId: { [Op.ne]: userId },
-            ...(m.lastReadAt && { createdAt: { [Op.gt]: m.lastReadAt } }),
-            ...(m.clearedAt && { createdAt: { [Op.gt]: m.clearedAt } }),
-          },
+        const unreadCount = await countDmUnread({
+          dmId: dm.id,
+          userId,
+          lastReadAt: m.lastReadAt,
+          clearedAt: m.clearedAt,
         });
 
         // Get last message for preview
@@ -180,31 +252,31 @@ export const getDms = async (req: AuthRequest, res: Response): Promise<void> => 
 // GET/POST /api/dms/:recipientId - Get or create a DM conversation
 export const getOrCreateDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
-    if (recipientId === userId) {
-      res.status(400).json({ error: 'Cannot create a DM with yourself' });
-      return;
-    }
-
-    // Check if recipient exists
-    const recipient = await User.findByPk(recipientId);
-    if (!recipient) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    // Find existing DM
-    let dm = await findExistingDm(userId, recipientId);
+    let dm = await findDmByIdOrRecipient(userId, recipientId);
+    let createdNewDm = false;
+    let otherUserId: string | null = null;
 
     if (!dm) {
-      // Create new DM
+      if (recipientId === userId) {
+        res.status(400).json({ error: 'Cannot create a DM with yourself' });
+        return;
+      }
+
+      const recipient = await User.findByPk(recipientId);
+      if (!recipient) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      otherUserId = recipientId;
+      createdNewDm = true;
       dm = await DirectMessage.create({
         createdBy: userId,
       });
 
-      // Add both users as participants
       await Promise.all([
         DirectMessageMember.create({
           dmId: dm.id,
@@ -217,7 +289,6 @@ export const getOrCreateDm = async (req: AuthRequest, res: Response): Promise<vo
       ]);
     }
 
-    // Fetch DM with participants
     const dmWithDetails = await DirectMessage.findByPk(dm.id, {
       include: [
         {
@@ -229,35 +300,54 @@ export const getOrCreateDm = async (req: AuthRequest, res: Response): Promise<vo
       ],
     });
 
-    // Get membership for settings
     const membership = await DirectMessageMember.findOne({
       where: { dmId: dm.id, userId },
     });
 
-    // Get unread count
-    const unreadCount = await Message.count({
-      where: {
-        dmId: dm.id,
-        isDeleted: false,
-        senderId: { [Op.ne]: userId },
-        ...(membership?.lastReadAt && { createdAt: { [Op.gt]: membership.lastReadAt } }),
-      },
-    });
+    const otherParticipant = (dmWithDetails as any)?.participants?.find((participant: any) => participant.id !== userId) || null;
+    otherUserId = otherUserId || otherParticipant?.id || null;
 
-    const otherParticipant = (dmWithDetails as any)?.participants?.find((p: any) => p.id !== userId);
+    const unreadCount = membership
+      ? await countDmUnread({
+          dmId: dm.id,
+          userId,
+          lastReadAt: membership.lastReadAt,
+          clearedAt: membership.clearedAt,
+        })
+      : 0;
+
+    const responseDm = {
+      id: dmWithDetails?.id,
+      participant: otherParticipant,
+      participants: (dmWithDetails as any)?.participants || [],
+      isArchived: membership?.isArchived || false,
+      isStarred: membership?.isStarred || false,
+      isMuted: membership?.isMuted || false,
+      unreadCount,
+      createdAt: dmWithDetails?.createdAt,
+      updatedAt: dmWithDetails?.updatedAt,
+    };
+
+    if (createdNewDm && otherUserId) {
+      try {
+        const io = getIO();
+        await Promise.all(
+          [userId, otherUserId].map(async (participantId) => {
+            const payload = await buildRealtimeDmForUser(dm.id, participantId);
+            if (payload) {
+              io.to(`user:${participantId}`).emit('dm_created', {
+                dm: payload,
+              });
+            }
+          })
+        );
+      } catch (e) {
+        console.error('Socket broadcast error (dm_created):', e);
+      }
+    }
 
     res.json({
-      dm: {
-        id: dmWithDetails?.id,
-        participant: otherParticipant || null,
-        participants: (dmWithDetails as any)?.participants || [],
-        isArchived: membership?.isArchived || false,
-        isStarred: membership?.isStarred || false,
-        isMuted: membership?.isMuted || false,
-        unreadCount,
-        createdAt: dmWithDetails?.createdAt,
-        updatedAt: dmWithDetails?.updatedAt,
-      },
+      dm: responseDm,
     });
   } catch (error) {
     console.error('Get/create DM error:', error);
@@ -268,33 +358,34 @@ export const getOrCreateDm = async (req: AuthRequest, res: Response): Promise<vo
 // POST /api/dms/:recipientId/messages - Send a DM
 export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const { text, poll } = req.body;
     const userId = req.user!.id;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
-    if (recipientId === userId) {
-      res.status(400).json({ error: 'Cannot send a message to yourself' });
-      return;
-    }
-
-    // Must have at least text, attachments, audio, or poll
     if (!text && !files?.attachments?.length && !files?.audio?.length && !poll) {
       res.status(400).json({ error: 'Message must have content' });
       return;
     }
 
-    // Check if recipient exists
-    const recipient = await User.findByPk(recipientId as string);
-    if (!recipient) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-
-    // Find or create DM
-    let dm = await findExistingDm(userId, recipientId as string);
+    let dm = await findDmByIdOrRecipient(userId, recipientId as string);
+    let createdNewDm = false;
+    let otherUserId: string | null = null;
 
     if (!dm) {
+      if (recipientId === userId) {
+        res.status(400).json({ error: 'Cannot send a message to yourself' });
+        return;
+      }
+
+      const recipient = await User.findByPk(recipientId as string);
+      if (!recipient) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      otherUserId = recipientId as string;
+      createdNewDm = true;
       dm = await DirectMessage.create({
         createdBy: userId,
       });
@@ -311,49 +402,57 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
       ]);
     }
 
+    const participantMemberships = await DirectMessageMember.findAll({
+      where: { dmId: dm.id },
+      attributes: ['userId', 'lastReadAt', 'clearedAt'],
+    });
+    otherUserId = otherUserId || participantMemberships.find((membership) => membership.userId !== userId)?.userId || null;
+
     const messageData: any = {
       dmId: dm.id,
       senderId: userId,
-      text: text ? text.trim() : null,
+      text: text ? String(text).trim() : null,
     };
 
-    // Upload attachments
     if (files?.attachments?.length) {
-      const uploadPromises = files.attachments.map((file) =>
-        uploadToCloudinary(file.buffer, 'attachments', 'auto')
+      const attachments = await Promise.all(
+        files.attachments.map(async (file) => {
+          const uploadResult = await uploadToCloudinary(file.buffer, 'attachments', file.mimetype.startsWith('image/') ? 'image' : (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) ? 'video' : 'auto');
+          return buildAttachmentFromUpload(file, uploadResult);
+        })
       );
-      const results = await Promise.all(uploadPromises);
-      messageData.attachments = results.map((r) => r.url);
+      messageData.attachments = attachments;
     }
 
-    // Upload audio
     if (files?.audio?.length) {
-      const audioResult = await uploadToCloudinary(files.audio[0].buffer, 'audio', 'video');
-      messageData.audio = {
-        url: audioResult.url,
-        duration: req.body.audioDuration || '0:00',
-      };
+      const audioFile = files.audio[0]!;
+      const uploadResult = await uploadToCloudinary(audioFile.buffer, 'audio', 'video');
+      messageData.audio = buildAttachmentFromUpload(audioFile, uploadResult, {
+        type: 'audio',
+        duration:
+          parseDurationSeconds(req.body.audioDuration) ??
+          parseDurationSeconds(uploadResult.duration),
+        thumbnailUrl: null,
+      });
     }
 
-    // Handle poll
     if (poll) {
       try {
         const pollData = typeof poll === 'string' ? JSON.parse(poll) : poll;
-        if (pollData.options && Array.isArray(pollData.options)) {
+        const normalizedPoll = normalizePoll(pollData);
+        if (normalizedPoll) {
           messageData.poll = {
-            options: pollData.options,
-            votes: {},
+            options: normalizedPoll.options,
+            votes: Object.fromEntries(normalizedPoll.options.map((option) => [option, []])),
           };
         }
-      } catch (e) {
-        // Invalid poll data, ignore
+      } catch {
+        // Ignore invalid poll payloads to preserve permissive existing behavior.
       }
     }
 
-    // Create the message
     const message = await Message.create(messageData);
 
-    // Fetch with sender info
     const fullMessage = await Message.findByPk(message.id, {
       include: [
         {
@@ -364,39 +463,54 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
       ],
     });
 
-    // Update sender's lastReadAt
     await DirectMessageMember.update(
       { lastReadAt: new Date() },
       { where: { dmId: dm.id, userId } }
     );
 
-    const formattedMessage = {
-      id: fullMessage!.id,
-      sender: (fullMessage as any).sender,
-      text: fullMessage!.text,
-      time: fullMessage!.createdAt,
-      isOwn: true,
-      reactions: [],
-      dmId: dm.id,
-      status: fullMessage!.status,
-      deliveredAt: fullMessage!.deliveredAt,
-      readAt: fullMessage!.readAt,
-    };
+    const formattedMessage = formatMessagePayload(fullMessage, userId, { dmId: dm.id });
 
-    // Broadcast to DM room via socket
     try {
       const io = getIO();
+
+      if (createdNewDm && otherUserId) {
+        await Promise.all(
+          [userId, otherUserId].map(async (participantId) => {
+            const payload = await buildRealtimeDmForUser(dm.id, participantId);
+            if (payload) {
+              io.to(`user:${participantId}`).emit('dm_created', {
+                dm: payload,
+              });
+            }
+          })
+        );
+      }
+
       io.to(`dm:${dm.id}`).emit('new_dm_message', {
         dmId: dm.id,
         message: { ...formattedMessage, isOwn: false },
       });
 
-      // Also emit unread_update to the recipient's user room
-      io.to(`user:${recipientId}`).emit('unread_update', {
-        type: 'dm',
-        dmId: dm.id,
-        senderId: userId,
-      });
+      if (otherUserId) {
+        const recipientMembership = participantMemberships.find((membership) => membership.userId === otherUserId);
+        const unreadCount = recipientMembership
+          ? await countDmUnread({
+              dmId: dm.id,
+              userId: otherUserId,
+              lastReadAt: recipientMembership.lastReadAt,
+              clearedAt: recipientMembership.clearedAt,
+            })
+          : 0;
+
+        io.to(`user:${otherUserId}`).emit('unread_update', {
+          type: 'dm',
+          dmId: dm.id,
+          senderId: userId,
+          otherUserId,
+          messageId: fullMessage!.id,
+          unreadCount,
+        });
+      }
     } catch (e) {
       console.error('Socket broadcast error (new_dm_message):', e);
     }
@@ -417,7 +531,7 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
 // GET /api/dms/:recipientId/messages - Get DM messages
 export const getDmMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const { page = 1, limit = 50, before } = req.query;
     const userId = req.user!.id;
     const offset = (Number(page) - 1) * Number(limit);
@@ -469,24 +583,7 @@ export const getDmMessages = async (req: AuthRequest, res: Response): Promise<vo
       order: [['createdAt', 'DESC']],
     });
 
-    const formattedMessages = messages.map((msg: any) => ({
-      id: msg.id,
-      sender: msg.sender,
-      text: msg.text,
-      time: msg.createdAt,
-      isOwn: msg.senderId === userId,
-      isEdited: msg.isEdited,
-      reactions: msg.reactions.map((r: any) => ({
-        emoji: r.emoji,
-        user: r.user,
-      })),
-      attachments: msg.attachments,
-      audio: msg.audio,
-      poll: msg.poll,
-      status: msg.status,
-      deliveredAt: msg.deliveredAt,
-      readAt: msg.readAt,
-    }));
+    const formattedMessages = messages.map((msg: any) => formatMessagePayload(msg, userId));
 
     res.json({
       messages: formattedMessages.reverse(),
@@ -506,7 +603,7 @@ export const getDmMessages = async (req: AuthRequest, res: Response): Promise<vo
 // POST /api/dms/:recipientId/archive
 export const archiveDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
     const dm = await findDmByIdOrRecipient(userId, recipientId);
@@ -541,7 +638,7 @@ export const archiveDm = async (req: AuthRequest, res: Response): Promise<void> 
 // POST /api/dms/:recipientId/star
 export const starDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
     const dm = await findDmByIdOrRecipient(userId, recipientId);
@@ -576,7 +673,7 @@ export const starDm = async (req: AuthRequest, res: Response): Promise<void> => 
 // POST /api/dms/:recipientId/mute
 export const muteDm = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
     const dm = await findDmByIdOrRecipient(userId, recipientId);
@@ -611,7 +708,7 @@ export const muteDm = async (req: AuthRequest, res: Response): Promise<void> => 
 // PATCH /api/dms/:recipientId/settings
 export const updateDmSettings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const { isArchived, isStarred, isMuted } = req.body;
     const userId = req.user!.id;
 
@@ -660,7 +757,7 @@ export const updateDmSettings = async (req: AuthRequest, res: Response): Promise
 // POST /api/dms/:recipientId/read - Mark DM as read
 export const markDmAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
     const dm = await findDmByIdOrRecipient(userId, recipientId);
@@ -678,11 +775,66 @@ export const markDmAsRead = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    await membership.update({ lastReadAt: new Date() });
+    const otherMembership = await DirectMessageMember.findOne({
+      where: { dmId: dm.id, userId: { [Op.ne]: userId } },
+      attributes: ['userId'],
+    });
+
+    const now = new Date();
+    const cutoff = getLatestReadBoundary(membership.lastReadAt, membership.clearedAt);
+    const readWhere: any = {
+      dmId: dm.id,
+      isDeleted: false,
+      senderId: { [Op.ne]: userId },
+      status: { [Op.ne]: 'read' },
+    };
+
+    if (cutoff) {
+      readWhere.createdAt = { [Op.gt]: cutoff };
+    }
+
+    const unreadMessages = await Message.findAll({
+      where: readWhere,
+      attributes: ['id'],
+    });
+
+    if (unreadMessages.length > 0) {
+      await Message.update(
+        { status: 'read', deliveredAt: now, readAt: now },
+        { where: { id: { [Op.in]: unreadMessages.map((message) => message.id) } } }
+      );
+    }
+
+    await membership.update({ lastReadAt: now });
+
+    try {
+      const io = getIO();
+      io.to(`user:${userId}`).emit('unread_update', {
+        type: 'dm',
+        dmId: dm.id,
+        otherUserId: otherMembership?.userId || null,
+        unreadCount: 0,
+      });
+
+      if (otherMembership?.userId) {
+        unreadMessages.forEach((message) => {
+          io.to(`user:${otherMembership.userId}`).emit('dm_message_status_update', {
+            messageId: message.id,
+            dmId: dm.id,
+            status: 'read',
+            deliveredAt: now,
+            readAt: now,
+          });
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (dm read):', e);
+    }
 
     res.json({
       message: 'DM marked as read',
       lastReadAt: membership.lastReadAt,
+      unreadCount: 0,
     });
   } catch (error) {
     console.error('Mark DM as read error:', error);
@@ -693,7 +845,7 @@ export const markDmAsRead = async (req: AuthRequest, res: Response): Promise<voi
 // DELETE /api/dms/:recipientId/messages - Clear DM messages
 export const clearDmMessages = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const userId = req.user!.id;
 
     const dm = await findDmByIdOrRecipient(userId, recipientId);
@@ -725,7 +877,7 @@ export const clearDmMessages = async (req: AuthRequest, res: Response): Promise<
 // GET /api/dms/:recipientId/media - Get DM media
 export const getDMMedia = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { recipientId } = req.params;
+    const recipientId = String(req.params.recipientId);
     const { page = 1, limit = 50 } = req.query;
     const userId = req.user!.id;
     const offset = (Number(page) - 1) * Number(limit);
@@ -775,13 +927,7 @@ export const getDMMedia = async (req: AuthRequest, res: Response): Promise<void>
       order: [['createdAt', 'DESC']],
     });
 
-    const formattedMedia = messages.map((msg: any) => ({
-      id: msg.id,
-      sender: msg.sender,
-      time: msg.createdAt,
-      attachments: msg.attachments,
-      audio: msg.audio,
-    }));
+    const formattedMedia = messages.map((msg: any) => formatMediaPayload(msg, userId));
 
     res.json({
       media: formattedMedia,
@@ -797,3 +943,4 @@ export const getDMMedia = async (req: AuthRequest, res: Response): Promise<void>
     res.status(500).json({ error: 'Failed to fetch DM media' });
   }
 };
+

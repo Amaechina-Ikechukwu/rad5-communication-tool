@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { waitForServer, stopTestServer, baseUrl } from './setup';
+import { Message } from '../src/models';
 
 let authToken: string;
 let userId: string;
@@ -112,6 +113,45 @@ describe('Channel Endpoints', () => {
       expect(data.id).toBe(channelId);
       expect(data.name).toBe('Test Channel');
       expect(data.members).toBeDefined();
+    });
+
+    it('should include media history and file attachments in channel details', async () => {
+      await Message.create({
+        channelId,
+        senderId: userId,
+        text: 'Channel details media seed',
+        attachments: [
+          {
+            name: 'preview.png',
+            url: 'https://example.com/preview.png',
+            type: 'image',
+            mimeType: 'image/png',
+            size: 3000,
+            duration: null,
+            thumbnailUrl: 'https://example.com/preview.png',
+          },
+          {
+            name: 'brief.pdf',
+            url: 'https://example.com/brief.pdf',
+            type: 'file',
+            mimeType: 'application/pdf',
+            size: 9000,
+            duration: null,
+            thumbnailUrl: null,
+          },
+        ],
+      } as any);
+
+      const response = await fetch(`${baseUrl}/channels/${channelId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(typeof data.unreadCount).toBe('number');
+      expect(Array.isArray(data.media)).toBe(true);
+      expect(data.media.some((item: any) => item.text === 'Channel details media seed')).toBe(true);
+      expect(data.attachments.some((item: any) => item.type === 'file')).toBe(true);
     });
 
     it('should reject non-member access', async () => {

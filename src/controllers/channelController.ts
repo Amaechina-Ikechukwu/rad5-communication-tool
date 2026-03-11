@@ -2,6 +2,42 @@ import type { Response } from 'express';
 import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
 import { Channel, ChannelMember, User, Message } from '../models';
 import type { AuthRequest } from '../middleware/auth';
+import { getIO } from '../socket/io';
+import { formatMediaPayload, flattenMessageAttachments } from '../utils/messagePayload';
+import { countChannelUnread } from '../utils/unread';
+
+const buildRealtimeChannelForUser = async (channelId: string, userId: string) => {
+  const membership = await ChannelMember.findOne({
+    where: { channelId, userId },
+    include: [
+      {
+        model: Channel,
+        as: 'channel',
+        include: [
+          {
+            model: User,
+            as: 'members',
+            attributes: ['id', 'name', 'avatar', 'isOnline'],
+            through: { attributes: ['role'] },
+          },
+        ],
+      },
+    ],
+  });
+
+  if (!membership || !(membership as any).channel) {
+    return null;
+  }
+
+  return {
+    ...(membership as any).channel.toJSON(),
+    role: membership.role,
+    isArchived: membership.isArchived,
+    isStarred: membership.isStarred,
+    isMuted: membership.isMuted,
+    unreadCount: 0,
+  };
+};
 
 // GET /api/channels
 export const getChannels = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -43,14 +79,11 @@ export const getChannels = async (req: AuthRequest, res: Response): Promise<void
     // Get unread counts for each channel
     let channelsWithDetails = await Promise.all(
       memberships.map(async (m: any) => {
-        const unreadCount = await Message.count({
-          where: {
-            channelId: m.channelId,
-            isDeleted: false,
-            senderId: { [Op.ne]: userId },
-            ...(m.lastReadAt && { createdAt: { [Op.gt]: m.lastReadAt } }),
-            ...(m.clearedAt && { createdAt: { [Op.gt]: m.clearedAt } }),
-          },
+        const unreadCount = await countChannelUnread({
+          channelId: m.channelId,
+          userId,
+          lastReadAt: m.lastReadAt,
+          clearedAt: m.clearedAt,
         });
 
         return {
@@ -154,6 +187,26 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
       ],
     });
 
+    try {
+      const io = getIO();
+      const memberIdsToNotify = [
+        userId,
+        ...((Array.isArray(memberIds) ? memberIds : []).filter((id: string) => id !== userId)),
+      ];
+
+      await Promise.all(
+        [...new Set(memberIdsToNotify)].map(async (memberId) => {
+          const payload = await buildRealtimeChannelForUser(channel.id, memberId);
+          if (payload) {
+            io.to(`user:${memberId}`).emit('channel_created', {
+              channel: payload,
+            });
+          }
+        })
+      );
+    } catch (e) {
+      console.error('Socket broadcast error (channel_created):', e);
+    }
     res.status(201).json({
       message: 'Channel created successfully',
       channel: channelWithMembers,
@@ -171,7 +224,6 @@ export const getChannelDetails = async (req: AuthRequest, res: Response): Promis
     const channelId = id as string;
     const userId = req.user!.id;
 
-    // Check if user is a member
     const membership = await ChannelMember.findOne({
       where: { channelId, userId },
     });
@@ -181,7 +233,6 @@ export const getChannelDetails = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // Get channel with members
     const channel = await Channel.findByPk(channelId, {
       include: [
         {
@@ -198,34 +249,24 @@ export const getChannelDetails = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // Get media and attachments from messages
     const messages = await Message.findAll({
       where: { channelId, isDeleted: false },
-      attributes: ['attachments', 'audio'],
+      attributes: ['id', 'senderId', 'text', 'attachments', 'audio', 'createdAt'],
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
     });
 
-    const media: string[] = [];
-    const attachments: { name: string; url: string; type: string }[] = [];
-
-    messages.forEach((msg: any) => {
-      if (msg.attachments && Array.isArray(msg.attachments)) {
-        msg.attachments.forEach((url: string) => {
-          if (url.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm)$/i)) {
-            media.push(url);
-          } else {
-            const name = url.split('/').pop() || 'file';
-            const type = url.split('.').pop() || 'file';
-            attachments.push({ name, url, type });
-          }
-        });
-      }
-      if (msg.audio?.url) {
-        attachments.push({
-          name: 'Audio message',
-          url: msg.audio.url,
-          type: 'audio',
-        });
-      }
+    const unreadCount = await countChannelUnread({
+      channelId,
+      userId,
+      lastReadAt: membership.lastReadAt,
+      clearedAt: membership.clearedAt,
     });
 
     res.json({
@@ -233,8 +274,9 @@ export const getChannelDetails = async (req: AuthRequest, res: Response): Promis
       name: channel.name,
       description: channel.description,
       members: channel.get('members'),
-      media,
-      attachments,
+      unreadCount,
+      media: messages.map((message: any) => formatMediaPayload(message, userId)),
+      attachments: flattenMessageAttachments(messages as any[], 'file'),
     });
   } catch (error) {
     console.error('Get channel details error:', error);
@@ -282,6 +324,17 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
       role: 'member',
     });
 
+    try {
+      const io = getIO();
+      const payload = await buildRealtimeChannelForUser(id as string, newMemberId);
+      if (payload) {
+        io.to(`user:${newMemberId}`).emit('channel_created', {
+          channel: payload,
+        });
+      }
+    } catch (e) {
+      console.error('Socket broadcast error (channel_created):', e);
+    }
     res.status(201).json({ message: 'Member added successfully' });
   } catch (error) {
     console.error('Add member error:', error);
@@ -474,11 +527,24 @@ export const markChannelAsRead = async (req: AuthRequest, res: Response): Promis
       return;
     }
 
-    await membership.update({ lastReadAt: new Date() });
+    const now = new Date();
+    await membership.update({ lastReadAt: now });
+
+    try {
+      const io = getIO();
+      io.to(`user:${userId}`).emit('unread_update', {
+        type: 'channel',
+        channelId: id,
+        unreadCount: 0,
+      });
+    } catch (e) {
+      console.error('Socket broadcast error (channel unread_update):', e);
+    }
 
     res.json({ 
       message: 'Channel marked as read',
-      lastReadAt: membership.lastReadAt
+      lastReadAt: membership.lastReadAt,
+      unreadCount: 0,
     });
   } catch (error) {
     console.error('Mark channel as read error:', error);
@@ -610,3 +676,4 @@ export const clearChannelMessages = async (req: AuthRequest, res: Response): Pro
     res.status(500).json({ error: 'Failed to clear messages' });
   }
 };
+

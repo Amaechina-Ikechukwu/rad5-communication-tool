@@ -2,6 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
 import { User, ChannelMember, DirectMessageMember, Message } from "../models";
+import { countChannelUnread, countDmUnread } from "../utils/unread";
 import { Op } from "sequelize";
 
 interface AuthenticatedSocket extends Socket {
@@ -48,6 +49,70 @@ export const initializeSocket = (server: HttpServer): Server => {
     transports: ["polling", "websocket"],
     allowUpgrades: true,
   });
+
+  const emitChannelUnreadUpdate = async (input: {
+    recipientUserId: string;
+    channelId: string;
+    senderId: string;
+    messageId?: string;
+  }) => {
+    const membership = await ChannelMember.findOne({
+      where: { channelId: input.channelId, userId: input.recipientUserId },
+      attributes: ["lastReadAt", "clearedAt"],
+    });
+
+    if (!membership) {
+      return;
+    }
+
+    const unreadCount = await countChannelUnread({
+      channelId: input.channelId,
+      userId: input.recipientUserId,
+      lastReadAt: membership.lastReadAt,
+      clearedAt: membership.clearedAt,
+    });
+
+    io.to(`user:${input.recipientUserId}`).emit("unread_update", {
+      type: "channel",
+      channelId: input.channelId,
+      senderId: input.senderId,
+      messageId: input.messageId,
+      unreadCount,
+    });
+  };
+
+  const emitDmUnreadUpdate = async (input: {
+    recipientUserId: string;
+    dmId: string;
+    senderId?: string;
+    otherUserId?: string;
+    messageId?: string;
+  }) => {
+    const membership = await DirectMessageMember.findOne({
+      where: { dmId: input.dmId, userId: input.recipientUserId },
+      attributes: ["lastReadAt", "clearedAt"],
+    });
+
+    if (!membership) {
+      return;
+    }
+
+    const unreadCount = await countDmUnread({
+      dmId: input.dmId,
+      userId: input.recipientUserId,
+      lastReadAt: membership.lastReadAt,
+      clearedAt: membership.clearedAt,
+    });
+
+    io.to(`user:${input.recipientUserId}`).emit("unread_update", {
+      type: "dm",
+      dmId: input.dmId,
+      senderId: input.senderId,
+      otherUserId: input.otherUserId || input.senderId || null,
+      messageId: input.messageId,
+      unreadCount,
+    });
+  };
 
   io.use(async (socket: AuthenticatedSocket, next) => {
     try {
@@ -287,33 +352,36 @@ export const initializeSocket = (server: HttpServer): Server => {
 
     // ─── Channel Message Events ──────────────────────
 
-    socket.on("new_message", (data: { channelId: string; message: any }) => {
+    socket.on("new_message", async (data: { channelId: string; message: any }) => {
       const { channelId, message } = data;
       const roomSize = io.sockets.adapter.rooms.get(
         `channel:${channelId}`,
       )?.size;
       console.log(
-        `💬 NEW_MESSAGE: user=${userId} channel=${channelId} | room size=${roomSize}`,
+        `???? NEW_MESSAGE: user=${userId} channel=${channelId} | room size=${roomSize}`,
       );
 
       socket.to(`channel:${channelId}`).emit("new_message", {
         channelId,
-        message: { ...message, status: "sent" },
+        message: { ...message, status: "sent", isOwn: false },
       });
 
       const onlineMembers = channelUsers.get(channelId);
       if (onlineMembers) {
         for (const memberId of onlineMembers) {
           if (memberId !== userId) {
-            const memberSocketId = userSockets.get(memberId);
-            if (memberSocketId) {
-              io.to(memberSocketId).emit("message_status_update", {
-                messageId: message.id,
-                channelId,
-                status: "delivered",
-                deliveredAt: new Date(),
-              });
-            }
+            io.to(`user:${memberId}`).emit("message_status_update", {
+              messageId: message.id,
+              channelId,
+              status: "delivered",
+              deliveredAt: new Date(),
+            });
+            await emitChannelUnreadUpdate({
+              recipientUserId: memberId,
+              channelId,
+              senderId: userId,
+              messageId: message.id,
+            });
           }
         }
         socket.emit("message_status_update", {
@@ -347,31 +415,35 @@ export const initializeSocket = (server: HttpServer): Server => {
 
     // ─── DM Message Events ───────────────────────────
 
-    socket.on("new_dm_message", (data: { dmId: string; message: any }) => {
+    socket.on("new_dm_message", async (data: { dmId: string; message: any }) => {
       const { dmId, message } = data;
       const roomSize = io.sockets.adapter.rooms.get(`dm:${dmId}`)?.size;
       console.log(
-        `💬 NEW_DM_MESSAGE: user=${userId} dm=${dmId} | room size=${roomSize}`,
+        `???? NEW_DM_MESSAGE: user=${userId} dm=${dmId} | room size=${roomSize}`,
       );
 
       socket.to(`dm:${dmId}`).emit("new_dm_message", {
         dmId,
-        message: { ...message, status: "sent" },
+        message: { ...message, status: "sent", isOwn: false },
       });
 
       const onlineDmMembers = dmUsers.get(dmId);
       if (onlineDmMembers) {
         for (const memberId of onlineDmMembers) {
           if (memberId !== userId) {
-            const memberSocketId = userSockets.get(memberId);
-            if (memberSocketId) {
-              io.to(memberSocketId).emit("dm_message_status_update", {
-                messageId: message.id,
-                dmId,
-                status: "delivered",
-                deliveredAt: new Date(),
-              });
-            }
+            io.to(`user:${memberId}`).emit("dm_message_status_update", {
+              messageId: message.id,
+              dmId,
+              status: "delivered",
+              deliveredAt: new Date(),
+            });
+            await emitDmUnreadUpdate({
+              recipientUserId: memberId,
+              dmId,
+              senderId: userId,
+              otherUserId: userId,
+              messageId: message.id,
+            });
           }
         }
         socket.emit("dm_message_status_update", {
@@ -380,18 +452,6 @@ export const initializeSocket = (server: HttpServer): Server => {
           status: "delivered",
           deliveredAt: new Date(),
         });
-      }
-
-      if (onlineDmMembers) {
-        for (const memberId of onlineDmMembers) {
-          if (memberId !== userId) {
-            io.to(`user:${memberId}`).emit("unread_update", {
-              type: "dm",
-              dmId,
-              senderId: userId,
-            });
-          }
-        }
       }
     });
 
@@ -420,25 +480,40 @@ export const initializeSocket = (server: HttpServer): Server => {
       async (data: { channelId: string; messageIds: string[] }) => {
         try {
           const { channelId, messageIds } = data;
+          if (!messageIds.length) {
+            return;
+          }
+
+          const deliverableMessages = await Message.findAll({
+            where: {
+              id: { [Op.in]: messageIds },
+              channelId,
+              senderId: { [Op.ne]: userId },
+              status: "sent",
+              isDeleted: false,
+            },
+            attributes: ["id", "senderId"],
+          });
+
+          if (!deliverableMessages.length) {
+            return;
+          }
+
           const now = new Date();
           await Message.update(
             { status: "delivered", deliveredAt: now },
-            { where: { id: { [Op.in]: messageIds }, status: "sent" } },
+            {
+              where: { id: { [Op.in]: deliverableMessages.map((message) => message.id) } },
+            },
           );
-          const messages = await Message.findAll({
-            where: { id: { [Op.in]: messageIds } },
-            attributes: ["id", "senderId"],
-          });
-          for (const msg of messages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("message_status_update", {
-                messageId: msg.id,
-                channelId,
-                status: "delivered",
-                deliveredAt: now,
-              });
-            }
+
+          for (const msg of deliverableMessages) {
+            io.to(`user:${msg.senderId}`).emit("message_status_update", {
+              messageId: msg.id,
+              channelId,
+              status: "delivered",
+              deliveredAt: now,
+            });
           }
         } catch (err) {
           console.error("messages_delivered error:", err);
@@ -451,34 +526,62 @@ export const initializeSocket = (server: HttpServer): Server => {
       async (data: { channelId: string; messageIds: string[] }) => {
         try {
           const { channelId, messageIds } = data;
+          const membership = await ChannelMember.findOne({
+            where: { channelId, userId },
+            attributes: ["clearedAt"],
+          });
+
+          if (!membership) {
+            return;
+          }
+
           const now = new Date();
-          await Message.update(
-            { status: "read", readAt: now, deliveredAt: now },
-            {
-              where: {
-                id: { [Op.in]: messageIds },
-                status: { [Op.ne]: "read" },
-              },
+          const readableMessages = await Message.findAll({
+            where: {
+              id: { [Op.in]: messageIds },
+              channelId,
+              senderId: { [Op.ne]: userId },
+              isDeleted: false,
+              status: { [Op.ne]: "read" },
             },
-          );
+            attributes: ["id", "senderId"],
+          });
+
+          if (readableMessages.length > 0) {
+            await Message.update(
+              { status: "read", readAt: now, deliveredAt: now },
+              {
+                where: { id: { [Op.in]: readableMessages.map((message) => message.id) } },
+              },
+            );
+          }
+
           await ChannelMember.update(
             { lastReadAt: now },
             { where: { channelId, userId } },
           );
-          const messages = await Message.findAll({
-            where: { id: { [Op.in]: messageIds } },
-            attributes: ["id", "senderId"],
+
+          const unreadCount = await countChannelUnread({
+            channelId,
+            userId,
+            lastReadAt: now,
+            clearedAt: membership.clearedAt,
           });
-          for (const msg of messages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("message_status_update", {
-                messageId: msg.id,
-                channelId,
-                status: "read",
-                readAt: now,
-              });
-            }
+
+          io.to(`user:${userId}`).emit("unread_update", {
+            type: "channel",
+            channelId,
+            unreadCount,
+          });
+
+          for (const msg of readableMessages) {
+            io.to(`user:${msg.senderId}`).emit("message_status_update", {
+              messageId: msg.id,
+              channelId,
+              status: "read",
+              deliveredAt: now,
+              readAt: now,
+            });
           }
         } catch (err) {
           console.error("messages_read error:", err);
@@ -486,32 +589,45 @@ export const initializeSocket = (server: HttpServer): Server => {
       },
     );
 
-    // ─── DM Message Status Events ────────────────────
-
     socket.on(
       "dm_messages_delivered",
       async (data: { dmId: string; messageIds: string[] }) => {
         try {
           const { dmId, messageIds } = data;
+          if (!messageIds.length) {
+            return;
+          }
+
+          const deliverableMessages = await Message.findAll({
+            where: {
+              id: { [Op.in]: messageIds },
+              dmId,
+              senderId: { [Op.ne]: userId },
+              status: "sent",
+              isDeleted: false,
+            },
+            attributes: ["id", "senderId"],
+          });
+
+          if (!deliverableMessages.length) {
+            return;
+          }
+
           const now = new Date();
           await Message.update(
             { status: "delivered", deliveredAt: now },
-            { where: { id: { [Op.in]: messageIds }, status: "sent" } },
+            {
+              where: { id: { [Op.in]: deliverableMessages.map((message) => message.id) } },
+            },
           );
-          const messages = await Message.findAll({
-            where: { id: { [Op.in]: messageIds } },
-            attributes: ["id", "senderId"],
-          });
-          for (const msg of messages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("dm_message_status_update", {
-                messageId: msg.id,
-                dmId,
-                status: "delivered",
-                deliveredAt: now,
-              });
-            }
+
+          for (const msg of deliverableMessages) {
+            io.to(`user:${msg.senderId}`).emit("dm_message_status_update", {
+              messageId: msg.id,
+              dmId,
+              status: "delivered",
+              deliveredAt: now,
+            });
           }
         } catch (err) {
           console.error("dm_messages_delivered error:", err);
@@ -524,42 +640,74 @@ export const initializeSocket = (server: HttpServer): Server => {
       async (data: { dmId: string; messageIds: string[] }) => {
         try {
           const { dmId, messageIds } = data;
+          const membership = await DirectMessageMember.findOne({
+            where: { dmId, userId },
+            attributes: ["clearedAt"],
+          });
+
+          if (!membership) {
+            return;
+          }
+
+          const otherMembership = await DirectMessageMember.findOne({
+            where: { dmId, userId: { [Op.ne]: userId } },
+            attributes: ["userId"],
+          });
+
           const now = new Date();
-          await Message.update(
-            { status: "read", readAt: now, deliveredAt: now },
-            {
-              where: {
-                id: { [Op.in]: messageIds },
-                status: { [Op.ne]: "read" },
-              },
+          const readableMessages = await Message.findAll({
+            where: {
+              id: { [Op.in]: messageIds },
+              dmId,
+              senderId: { [Op.ne]: userId },
+              isDeleted: false,
+              status: { [Op.ne]: "read" },
             },
-          );
+            attributes: ["id", "senderId"],
+          });
+
+          if (readableMessages.length > 0) {
+            await Message.update(
+              { status: "read", readAt: now, deliveredAt: now },
+              {
+                where: { id: { [Op.in]: readableMessages.map((message) => message.id) } },
+              },
+            );
+          }
+
           await DirectMessageMember.update(
             { lastReadAt: now },
             { where: { dmId, userId } },
           );
-          const messages = await Message.findAll({
-            where: { id: { [Op.in]: messageIds } },
-            attributes: ["id", "senderId"],
+
+          const unreadCount = await countDmUnread({
+            dmId,
+            userId,
+            lastReadAt: now,
+            clearedAt: membership.clearedAt,
           });
-          for (const msg of messages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("dm_message_status_update", {
-                messageId: msg.id,
-                dmId,
-                status: "read",
-                readAt: now,
-              });
-            }
+
+          io.to(`user:${userId}`).emit("unread_update", {
+            type: "dm",
+            dmId,
+            otherUserId: otherMembership?.userId || null,
+            unreadCount,
+          });
+
+          for (const msg of readableMessages) {
+            io.to(`user:${msg.senderId}`).emit("dm_message_status_update", {
+              messageId: msg.id,
+              dmId,
+              status: "read",
+              deliveredAt: now,
+              readAt: now,
+            });
           }
         } catch (err) {
           console.error("dm_messages_read error:", err);
         }
       },
     );
-
-    // ─── Reaction Events ─────────────────────────────
 
     socket.on(
       "reaction_update",

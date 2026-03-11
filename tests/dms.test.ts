@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { waitForServer, stopTestServer, baseUrl } from './setup';
+import { Message } from '../src/models';
 
 let authToken: string;
 let userId: string;
 let otherUserToken: string;
 let otherUserId: string;
+let dmId: string;
 
 beforeAll(async () => {
   await waitForServer();
@@ -55,6 +57,7 @@ describe('Direct Messages Endpoints', () => {
       expect(data.dm.id).toBeDefined();
       expect(data.dm.participant).toBeDefined();
       expect(data.dm.participant.id).toBe(otherUserId);
+      dmId = data.dm.id;
     });
 
     it('should return the same DM on second call', async () => {
@@ -98,6 +101,54 @@ describe('Direct Messages Endpoints', () => {
       expect(data.data.text).toBe('Hello from DM test!');
       expect(data.dm).toBeDefined();
       expect(data.dm.id).toBeDefined();
+      dmId = data.dm.id;
+    });
+
+    it('should send a direct message using the DM id route param', async () => {
+      const response = await fetch(`${baseUrl}/dms/${dmId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: 'Hello using the DM id' }),
+      });
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(201);
+      expect(data.dm.id).toBe(dmId);
+      expect(data.data.text).toBe('Hello using the DM id');
+    });
+
+    it('should create a DM poll and allow the other user to vote', async () => {
+      const createResponse = await fetch(`${baseUrl}/dms/${dmId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: 'Pick one',
+          poll: { options: ['Yes', 'No'] },
+        }),
+      });
+      const createData = await createResponse.json() as any;
+
+      expect(createResponse.status).toBe(201);
+      expect(createData.data.poll.options).toEqual(['Yes', 'No']);
+
+      const voteResponse = await fetch(`${baseUrl}/messages/${createData.data.id}/poll/vote`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${otherUserToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ option: 'Yes' }),
+      });
+      const voteData = await voteResponse.json() as any;
+
+      expect(voteResponse.status).toBe(200);
+      expect(voteData.poll.votes.Yes).toContain(otherUserId);
     });
 
     it('should reject empty message text', async () => {
@@ -152,7 +203,6 @@ describe('Direct Messages Endpoints', () => {
     });
 
     it('should allow recipient to see the DM', async () => {
-      // Send a message from authToken user to otherUser
       await fetch(`${baseUrl}/dms/${otherUserId}/messages`, {
         method: 'POST',
         headers: {
@@ -162,7 +212,6 @@ describe('Direct Messages Endpoints', () => {
         body: JSON.stringify({ text: 'Can you see this DM?' }),
       });
 
-      // Now read as the other user
       const response = await fetch(`${baseUrl}/dms/${userId}/messages`, {
         headers: { Authorization: `Bearer ${otherUserToken}` },
       });
@@ -171,6 +220,45 @@ describe('Direct Messages Endpoints', () => {
       expect(response.status).toBe(200);
       expect(data.messages).toBeDefined();
       expect(data.messages.some((m: any) => m.text === 'Can you see this DM?')).toBe(true);
+    });
+
+    it('should return rich attachment metadata for DM history', async () => {
+      await Message.create({
+        dmId,
+        senderId: userId,
+        text: 'DM attachment metadata seed',
+        attachments: [
+          {
+            name: 'cover.png',
+            url: 'https://example.com/cover.png',
+            type: 'image',
+            mimeType: 'image/png',
+            size: 1234,
+            duration: null,
+            thumbnailUrl: 'https://example.com/cover.png',
+          },
+        ],
+        audio: {
+          name: 'voice-note.webm',
+          url: 'https://example.com/voice-note.webm',
+          type: 'audio',
+          mimeType: 'audio/webm',
+          size: 512,
+          duration: 11,
+          thumbnailUrl: null,
+        },
+      } as any);
+
+      const response = await fetch(`${baseUrl}/dms/${dmId}/messages`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await response.json() as any;
+      const message = data.messages.find((item: any) => item.text === 'DM attachment metadata seed');
+
+      expect(response.status).toBe(200);
+      expect(message.attachments[0].mimeType).toBe('image/png');
+      expect(message.audio.duration).toBe(11);
+      expect(message.hasAudio).toBe(true);
     });
   });
 
@@ -284,6 +372,7 @@ describe('Direct Messages Endpoints', () => {
         expect(response.status).toBe(200);
         expect(data.message).toBe('DM marked as read');
         expect(data.lastReadAt).toBeDefined();
+        expect(data.unreadCount).toBe(0);
       });
     });
 

@@ -2742,8 +2742,8 @@
         "tags": [
           "Messages"
         ],
-        "summary": "Upload a file",
-        "description": "Upload a single file to Cloudinary. Returns the file URL and metadata.",
+        "summary": "Upload a message attachment",
+        "description": "Upload a file or voice note and receive the normalized attachment metadata returned by message payloads.",
         "security": [
           {
             "BearerAuth": []
@@ -2770,28 +2770,48 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "File uploaded",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "attachment": {
+                      "$ref": "#/components/schemas/Attachment"
+                    },
                     "url": {
                       "type": "string",
                       "format": "uri"
                     },
-                    "publicId": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "image",
+                        "video",
+                        "audio",
+                        "file"
+                      ]
+                    },
+                    "originalName": {
                       "type": "string"
                     },
-                    "resourceType": {
-                      "type": "string"
-                    },
-                    "format": {
-                      "type": "string"
+                    "mimeType": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "size": {
-                      "type": "integer"
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "duration": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "thumbnailUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "nullable": true
                     }
                   }
                 }
@@ -2892,7 +2912,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "User ID of the DM recipient"
+            "description": "Recipient user ID or an existing DM conversation ID."
           }
         ],
         "responses": {
@@ -2938,7 +2958,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Recipient user ID or an existing DM conversation ID."
           }
         ],
         "responses": {
@@ -2980,7 +3001,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Recipient user ID or an existing DM conversation ID."
           },
           {
             "in": "query",
@@ -3054,7 +3076,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Recipient user ID or an existing DM conversation ID."
           }
         ],
         "requestBody": {
@@ -3560,65 +3583,11 @@
                     "media": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "sender": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "avatar": {
-                                "type": "string"
-                              }
-                            }
-                          },
-                          "time": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "attachments": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "audio": {
-                            "type": "object",
-                            "properties": {
-                              "url": {
-                                "type": "string"
-                              },
-                              "duration": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
+                        "$ref": "#/components/schemas/MediaMessage"
                       }
                     },
                     "pagination": {
-                      "type": "object",
-                      "properties": {
-                        "total": {
-                          "type": "integer"
-                        },
-                        "page": {
-                          "type": "integer"
-                        },
-                        "limit": {
-                          "type": "integer"
-                        },
-                        "hasMore": {
-                          "type": "boolean"
-                        }
-                      }
+                      "$ref": "#/components/schemas/Pagination"
                     }
                   }
                 }
@@ -3679,67 +3648,107 @@
                     "media": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "sender": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "avatar": {
-                                "type": "string"
-                              }
-                            }
-                          },
-                          "time": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "attachments": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            }
-                          },
-                          "audio": {
-                            "type": "object",
-                            "properties": {
-                              "url": {
-                                "type": "string"
-                              },
-                              "duration": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
+                        "$ref": "#/components/schemas/MediaMessage"
                       }
                     },
                     "pagination": {
-                      "type": "object",
-                      "properties": {
-                        "total": {
-                          "type": "integer"
-                        },
-                        "page": {
-                          "type": "integer"
-                        },
-                        "limit": {
-                          "type": "integer"
-                        },
-                        "hasMore": {
-                          "type": "boolean"
-                        }
-                      }
+                      "$ref": "#/components/schemas/Pagination"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/upload": {
+      "post": {
+        "tags": [
+          "Messages"
+        ],
+        "summary": "Upload a message attachment",
+        "description": "Upload a file or voice note and receive the normalized attachment metadata returned by message payloads.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File to upload"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "File uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "attachment": {
+                      "$ref": "#/components/schemas/Attachment"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "image",
+                        "video",
+                        "audio",
+                        "file"
+                      ]
+                    },
+                    "originalName": {
+                      "type": "string"
+                    },
+                    "mimeType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "size": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "duration": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "thumbnailUrl": {
+                      "type": "string",
+                      "format": "uri",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file provided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -3973,7 +3982,7 @@
           },
           "unread": {
             "type": "integer",
-            "description": "Total unread message count across all channels (only returned for current user)"
+            "description": "Persisted unread message count across channels and DMs."
           },
           "createdAt": {
             "type": "string",
@@ -3982,6 +3991,16 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "unreadCount": {
+            "type": "integer",
+            "description": "Persisted unread message count across channels and DMs."
+          },
+          "dmId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Existing DM conversation id between the current user and this user, when one exists."
           }
         }
       },
@@ -4187,31 +4206,23 @@
               "$ref": "#/components/schemas/ChannelMember"
             }
           },
+          "unreadCount": {
+            "type": "integer",
+            "example": 0
+          },
           "media": {
             "type": "array",
             "items": {
-              "type": "string",
-              "format": "uri"
+              "$ref": "#/components/schemas/MediaMessage"
             },
-            "description": "URLs of media files shared in the channel"
+            "description": "Recent media history for the channel using the same shape as the media endpoints."
           },
           "attachments": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string",
-                  "format": "uri"
-                },
-                "type": {
-                  "type": "string"
-                }
-              }
-            }
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "description": "Flattened non-media file attachments shared in the channel."
           }
         }
       },
@@ -4291,7 +4302,7 @@
               "delivered",
               "read"
             ],
-            "description": "Message delivery status"
+            "description": "Initial send responses return \"sent\". Delivered/read changes arrive through separate status events."
           },
           "deliveredAt": {
             "type": "string",
@@ -4331,23 +4342,16 @@
           "attachments": {
             "type": "array",
             "items": {
-              "type": "string",
-              "format": "uri"
+              "$ref": "#/components/schemas/Attachment"
             }
           },
           "audio": {
-            "type": "object",
-            "nullable": true,
-            "properties": {
-              "url": {
-                "type": "string",
-                "format": "uri"
-              },
-              "duration": {
-                "type": "string",
-                "example": "0:30"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Attachment"
               }
-            }
+            ],
+            "nullable": true
           },
           "poll": {
             "type": "object",
@@ -4370,6 +4374,20 @@
                 }
               }
             }
+          },
+          "hasImage": {
+            "type": "boolean",
+            "description": "True when attachments contain at least one image."
+          },
+          "hasAudio": {
+            "type": "boolean",
+            "description": "True when the message includes a voice note/audio attachment."
+          },
+          "dmId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Included for direct-message payloads."
           }
         }
       },
@@ -4487,6 +4505,149 @@
           "error": {
             "type": "string",
             "description": "Error message"
+          }
+        }
+      },
+      "Attachment": {
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "photo.jpg"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "audio",
+              "file"
+            ],
+            "example": "image"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true,
+            "example": "image/jpeg"
+          },
+          "size": {
+            "type": "integer",
+            "nullable": true,
+            "example": 2048
+          },
+          "duration": {
+            "type": "number",
+            "nullable": true,
+            "example": 14
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          }
+        }
+      },
+      "MediaMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "avatar": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true
+              }
+            }
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          },
+          "audio": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Attachment"
+              }
+            ],
+            "nullable": true
+          },
+          "hasImage": {
+            "type": "boolean"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UnreadUpdateEvent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "channel",
+              "dm"
+            ]
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "dmId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "otherUserId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "unreadCount": {
+            "type": "integer",
+            "example": 1
           }
         }
       }

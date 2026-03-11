@@ -1,49 +1,33 @@
 import { Router } from 'express';
-import { 
-  getMessages, 
-  sendMessage, 
-  editMessage, 
-  deleteMessage, 
+import {
+  getMessages,
+  sendMessage,
+  editMessage,
+  deleteMessage,
   addReaction,
   uploadFile,
   votePoll,
   updateMessageStatus,
-  getChannelMedia
+  getChannelMedia,
 } from '../controllers/messageController';
 import { authenticate } from '../middleware/auth';
-import { uploadMessageFiles, uploadAttachments } from '../middleware/upload';
+import { uploadMessageFiles } from '../middleware/upload';
 import multer from 'multer';
 
 const router = Router();
+const uploadSingleFile = multer({ storage: multer.memoryStorage() }).single('file');
 
-// All routes require authentication
 router.use(authenticate);
 
-// GET /api/channels/:channelId/messages
 router.get('/channels/:channelId/messages', getMessages);
-
-// GET /api/channels/:channelId/media
 router.get('/channels/:channelId/media', getChannelMedia);
-
-// POST /api/channels/:channelId/messages (with file uploads)
 router.post('/channels/:channelId/messages', uploadMessageFiles, sendMessage);
-
-// PUT /api/messages/:id (edit)
 router.put('/messages/:id', editMessage);
-
-// DELETE /api/messages/:id
 router.delete('/messages/:id', deleteMessage);
-
-// POST /api/messages/:id/reactions
 router.post('/messages/:id/reactions', addReaction);
-
-// POST /api/messages/:id/poll/vote
 router.post('/messages/:id/poll/vote', votePoll);
-
-// PATCH /api/messages/:id/status
 router.patch('/messages/:id/status', updateMessageStatus);
-
-// POST /api/upload (generic file upload)
-router.post('/upload', multer({ storage: multer.memoryStorage() }).single('file'), uploadFile);
+router.post('/messages/upload', uploadSingleFile, uploadFile);
+router.post('/upload', uploadSingleFile, uploadFile);
 
 export default router;

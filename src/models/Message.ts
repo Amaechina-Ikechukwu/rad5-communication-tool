@@ -1,12 +1,18 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model } from 'sequelize';
+import type { Optional } from 'sequelize';
 import sequelize from '../config/db';
 
-interface AudioInfo {
+export interface MessageAttachment {
+  name: string;
   url: string;
-  duration: string;
+  type: 'image' | 'video' | 'audio' | 'file';
+  mimeType: string | null;
+  size: number | null;
+  duration: number | null;
+  thumbnailUrl: string | null;
 }
 
-interface PollInfo {
+export interface PollInfo {
   options: string[];
   votes: { [option: string]: string[] };
 }
@@ -17,8 +23,8 @@ interface MessageAttributes {
   dmId: string | null;
   senderId: string;
   text: string | null;
-  attachments: string[];
-  audio: AudioInfo | null;
+  attachments: MessageAttachment[];
+  audio: MessageAttachment | null;
   poll: PollInfo | null;
   isEdited: boolean;
   isDeleted: boolean;
@@ -37,8 +43,8 @@ class Message extends Model<MessageAttributes, MessageCreationAttributes> implem
   declare dmId: string | null;
   declare senderId: string;
   declare text: string | null;
-  declare attachments: string[];
-  declare audio: AudioInfo | null;
+  declare attachments: MessageAttachment[];
+  declare audio: MessageAttachment | null;
   declare poll: PollInfo | null;
   declare isEdited: boolean;
   declare isDeleted: boolean;

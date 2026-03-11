@@ -74,8 +74,16 @@ export function SocketProvider({
       // update global online-status store here
     });
 
-    socketRef.current.on('unread_update', ({ type, dmId, senderId }) => {
-      // increment unread badge for dmId
+    socketRef.current.on('unread_update', ({ type, dmId, channelId, senderId }) => {
+      // refresh the matching DM or channel badge here
+    });
+
+    socketRef.current.on('channel_created', ({ channel }) => {
+      // add the new channel to the sidebar or refetch channels
+    });
+
+    socketRef.current.on('dm_created', ({ dm }) => {
+      // add the new DM to the sidebar or refetch dms
     });
 
     forceUpdate(n => n + 1); // expose socket to consumers immediately
@@ -444,3 +452,4 @@ export default function DmPage({ recipientId }: { recipientId: string }) {
 4. **Clean up listeners on unmount** — all hooks above do this in the `useEffect` cleanup.
 5. **Typing** is the only event that goes client→socket (not REST-backed). Debounce with a 1.5s timeout for `isTyping: false`.
 6. **Mark as read** — emit `messages_read` / `dm_messages_read` via socket when the user views the conversation. This persists to the DB and notifies the sender.
+

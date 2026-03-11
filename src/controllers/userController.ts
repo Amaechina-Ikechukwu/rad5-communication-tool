@@ -1,8 +1,9 @@
 import type { Response } from 'express';
 import { Op, fn, col, where as sequelizeWhere } from 'sequelize';
-import { User, ChannelMember, Message, Channel } from '../models';
+import { User, ChannelMember, Channel, DirectMessage, DirectMessageMember } from '../models';
 import type { AuthRequest } from '../middleware/auth';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import { countChannelUnread, countDmUnread } from '../utils/unread';
 
 // GET /api/users
 export const getUsers = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -16,8 +17,6 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     if (search && typeof search === 'string') {
       const searchTerm = search.toLowerCase().trim();
       
-      // Use case-insensitive search with ILIKE (PostgreSQL)
-      // Search across name and email fields
       whereClause[Op.or] = [
         sequelizeWhere(fn('LOWER', col('name')), { [Op.like]: `%${searchTerm}%` }),
         sequelizeWhere(fn('LOWER', col('email')), { [Op.like]: `%${searchTerm}%` }),
@@ -37,66 +36,59 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
       order: [['name', 'ASC']],
     });
 
-    // Get all DM channels for current user to compute unread/status
-    const personalChannels = await ChannelMember.findAll({
+    const dmMemberships = await DirectMessageMember.findAll({
       where: { userId: currentUserId },
-      include: [{
-        model: Channel,
-        as: 'channel',
-        where: { isGroup: false },
-        include: [{
-          model: User,
-          as: 'members',
-          attributes: ['id'],
-          through: { attributes: [] }
-        }]
-      }]
+      include: [
+        {
+          model: DirectMessage,
+          as: 'directMessage',
+          include: [
+            {
+              model: User,
+              as: 'participants',
+              attributes: ['id'],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
     });
 
-    // Map otherUserId -> channel info
-    const dmMap = new Map<string, any>();
-    personalChannels.forEach((m: any) => {
-      const otherMember = m.channel.members.find((mem: any) => mem.id !== currentUserId);
-      if (otherMember) {
-        dmMap.set(otherMember.id, {
-          channelId: m.channelId,
-          lastReadAt: m.lastReadAt,
-          isArchived: m.isArchived,
-          isStarred: m.isStarred,
-          isMuted: m.isMuted
+    const dmMap = new Map();
+    dmMemberships.forEach((membership) => {
+      const directMessage = (membership as any).directMessage;
+      const otherParticipant = directMessage?.participants?.find((participant: any) => participant.id !== currentUserId);
+      if (otherParticipant) {
+        dmMap.set(otherParticipant.id, {
+          dmId: membership.dmId,
+          lastReadAt: membership.lastReadAt,
+          clearedAt: membership.clearedAt,
+          isArchived: membership.isArchived,
+          isStarred: membership.isStarred,
+          isMuted: membership.isMuted,
         });
       }
     });
 
-    // Compute extra fields for each user
     const usersWithDetails = await Promise.all(users.map(async (user) => {
       const dmInfo = dmMap.get(user.id);
-      let unread = 0;
-      let isArchived = false;
-      let isStarred = false;
-      let isMuted = false;
-
-      if (dmInfo) {
-        isArchived = dmInfo.isArchived;
-        isStarred = dmInfo.isStarred;
-        isMuted = dmInfo.isMuted;
-        
-        unread = await Message.count({
-          where: {
-            channelId: dmInfo.channelId,
-            isDeleted: false,
-            senderId: user.id, // Messages FROM this user
-            ...(dmInfo.lastReadAt && { createdAt: { [Op.gt]: dmInfo.lastReadAt } }),
-          },
-        });
-      }
+      const unreadCount = dmInfo
+        ? await countDmUnread({
+            dmId: dmInfo.dmId,
+            userId: currentUserId,
+            lastReadAt: dmInfo.lastReadAt,
+            clearedAt: dmInfo.clearedAt,
+          })
+        : 0;
 
       return {
         ...user.toJSON(),
-        unread,
-        isArchived,
-        isStarred,
-        isMuted
+        dmId: dmInfo?.dmId || null,
+        unreadCount,
+        unread: unreadCount,
+        isArchived: dmInfo?.isArchived || false,
+        isStarred: dmInfo?.isStarred || false,
+        isMuted: dmInfo?.isMuted || false,
       };
     }));
 
@@ -153,29 +145,39 @@ export const getCurrentUser = async (req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // Get total unread count across all channels
-    const memberships = await ChannelMember.findAll({
-      where: { userId },
-      attributes: ['channelId', 'lastReadAt'],
-    });
+    const [channelMemberships, dmMemberships] = await Promise.all([
+      ChannelMember.findAll({
+        where: { userId },
+        attributes: ['channelId', 'lastReadAt', 'clearedAt'],
+      }),
+      DirectMessageMember.findAll({
+        where: { userId },
+        attributes: ['dmId', 'lastReadAt', 'clearedAt'],
+      }),
+    ]);
 
-    let totalUnread = 0;
-    for (const membership of memberships) {
-      const unreadCount = await Message.count({
-        where: {
-          channelId: membership.channelId,
-          isDeleted: false,
-          senderId: { [Op.ne]: userId },
-          ...(membership.lastReadAt && { createdAt: { [Op.gt]: membership.lastReadAt } }),
-        },
-      });
-      totalUnread += unreadCount;
-    }
+    const [channelUnreadCounts, dmUnreadCounts] = await Promise.all([
+      Promise.all(channelMemberships.map((membership) => countChannelUnread({
+        channelId: membership.channelId,
+        userId,
+        lastReadAt: membership.lastReadAt,
+        clearedAt: membership.clearedAt,
+      }))),
+      Promise.all(dmMemberships.map((membership) => countDmUnread({
+        dmId: membership.dmId,
+        userId,
+        lastReadAt: membership.lastReadAt,
+        clearedAt: membership.clearedAt,
+      }))),
+    ]);
+
+    const totalUnread = [...channelUnreadCounts, ...dmUnreadCounts].reduce((sum, count) => sum + count, 0);
 
     res.json({ 
       user: {
         ...user.toJSON(),
         unread: totalUnread,
+        unreadCount: totalUnread,
       }
     });
   } catch (error) {

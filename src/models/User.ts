@@ -1,4 +1,5 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model } from 'sequelize';
+import type { Optional } from 'sequelize';
 import sequelize from '../config/db';
 import bcrypt from 'bcryptjs';
 
@@ -60,7 +61,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     return bcrypt.compare(candidatePassword, this.password);
   }
 
-  toJSON(): Omit<UserAttributes, 'password' | 'resetToken' | 'resetTokenExpiry'> {
+  override toJSON(): Omit<UserAttributes, 'password' | 'resetToken' | 'resetTokenExpiry'> {
     const values = { ...this.get() };
     delete (values as any).password;
     delete (values as any).resetToken;
