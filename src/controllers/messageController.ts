@@ -9,6 +9,8 @@ import {
   buildAttachmentFromUpload,
   formatMessagePayload,
   formatMediaPayload,
+  normalizeAttachmentInput,
+  normalizeAudioInput,
   normalizePoll,
   parseDurationSeconds,
 } from '../utils/messagePayload';
@@ -85,9 +87,16 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
     });
 
     const formattedMessages = messages.map((msg: any) => formatMessagePayload(msg, userId));
+    const unreadCount = await countChannelUnread({
+      channelId,
+      userId,
+      lastReadAt: membership.lastReadAt,
+      clearedAt: membership.clearedAt,
+    });
 
     res.json({
       messages: formattedMessages.reverse(),
+      unreadCount,
       pagination: {
         total: count,
         page: Number(page),
@@ -118,7 +127,12 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    if (!text && !files?.attachments?.length && !files?.audio?.length && !poll) {
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    const bodyAttachments = normalizeAttachmentInput(req.body.attachments);
+    const bodyAudio = normalizeAudioInput(req.body.audio);
+    const pollPayload = buildPollPayload(poll);
+
+    if (!trimmedText && !bodyAttachments.length && !bodyAudio && !files?.attachments?.length && !files?.audio?.length && !pollPayload) {
       res.status(400).json({ error: 'Message must have content' });
       return;
     }
@@ -126,21 +140,25 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
     const messageData: any = {
       channelId,
       senderId: userId,
-      text: text ? String(text).trim() : null,
+      text: trimmedText || null,
     };
 
-    if (files?.attachments?.length) {
-      const attachmentUploads = await Promise.all(
-        files.attachments.map(async (file) => {
-          const uploadResult = await uploadToCloudinary(
-            file.buffer,
-            'attachments',
-            getUploadResourceType(file.mimetype)
-          );
-          return buildAttachmentFromUpload(file, uploadResult);
-        })
-      );
-      messageData.attachments = attachmentUploads;
+    const attachmentUploads = files?.attachments?.length
+      ? await Promise.all(
+          files.attachments.map(async (file) => {
+            const uploadResult = await uploadToCloudinary(
+              file.buffer,
+              'attachments',
+              getUploadResourceType(file.mimetype)
+            );
+            return buildAttachmentFromUpload(file, uploadResult);
+          })
+        )
+      : [];
+
+    const combinedAttachments = [...bodyAttachments, ...attachmentUploads];
+    if (combinedAttachments.length) {
+      messageData.attachments = combinedAttachments;
     }
 
     if (files?.audio?.length) {
@@ -153,18 +171,12 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
           parseDurationSeconds(uploadResult.duration),
         thumbnailUrl: null,
       });
+    } else if (bodyAudio) {
+      messageData.audio = bodyAudio;
     }
 
-    if (poll) {
-      try {
-        const pollData = typeof poll === 'string' ? JSON.parse(poll) : poll;
-        const pollPayload = buildPollPayload(pollData);
-        if (pollPayload) {
-          messageData.poll = pollPayload;
-        }
-      } catch {
-        // Ignore invalid poll payloads to match the existing permissive behavior.
-      }
+    if (pollPayload) {
+      messageData.poll = pollPayload;
     }
 
     const message = await Message.create(messageData);
@@ -713,3 +725,4 @@ export const getChannelMedia = async (req: AuthRequest, res: Response): Promise<
     res.status(500).json({ error: 'Failed to fetch channel media' });
   }
 };
+

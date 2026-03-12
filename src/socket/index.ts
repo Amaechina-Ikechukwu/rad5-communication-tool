@@ -1,9 +1,10 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
 import jwt from "jsonwebtoken";
+import { Op } from "sequelize";
 import { User, ChannelMember, DirectMessageMember, Message } from "../models";
 import { countChannelUnread, countDmUnread } from "../utils/unread";
-import { Op } from "sequelize";
+import { sendPresenceWebhook } from "../utils/webhooks";
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -12,7 +13,7 @@ interface AuthenticatedSocket extends Socket {
 
 const channelUsers: Map<string, Set<string>> = new Map();
 const dmUsers: Map<string, Set<string>> = new Map();
-const userSockets: Map<string, string> = new Map();
+const userSockets: Map<string, Set<string>> = new Map();
 const activeCalls: Map<
   string,
   {
@@ -23,6 +24,36 @@ const activeCalls: Map<
     startedAt: Date;
   }
 > = new Map();
+
+const addUserSocket = (userId: string, socketId: string): boolean => {
+  let sockets = userSockets.get(userId);
+
+  if (!sockets) {
+    sockets = new Set<string>();
+    userSockets.set(userId, sockets);
+  }
+
+  const wasOffline = sockets.size === 0;
+  sockets.add(socketId);
+  return wasOffline;
+};
+
+const removeUserSocket = (userId: string, socketId: string): boolean => {
+  const sockets = userSockets.get(userId);
+  if (!sockets) {
+    return true;
+  }
+
+  sockets.delete(socketId);
+  if (sockets.size === 0) {
+    userSockets.delete(userId);
+    return true;
+  }
+
+  return false;
+};
+
+const getActiveConnectionCount = (userId: string): number => userSockets.get(userId)?.size || 0;
 
 export const initializeSocket = (server: HttpServer): Server => {
   const allowedOrigins: string[] = [
@@ -114,6 +145,25 @@ export const initializeSocket = (server: HttpServer): Server => {
     });
   };
 
+  const emitPresenceUpdate = async (input: {
+    userId: string;
+    status: "online" | "offline";
+    lastActive: Date;
+  }) => {
+    io.emit("user_presence", {
+      userId: input.userId,
+      status: input.status,
+      lastActive: input.lastActive,
+    });
+
+    await sendPresenceWebhook({
+      userId: input.userId,
+      status: input.status,
+      lastActive: input.lastActive,
+      activeConnections: getActiveConnectionCount(input.userId),
+    });
+  };
+
   io.use(async (socket: AuthenticatedSocket, next) => {
     try {
       const token = socket.handshake.query.token as string;
@@ -142,18 +192,25 @@ export const initializeSocket = (server: HttpServer): Server => {
     );
     console.log(`📊 Total connected sockets: ${io.sockets.sockets.size}`);
 
-    userSockets.set(userId, socket.id);
+    const isFirstActiveConnection = addUserSocket(userId, socket.id);
     socket.join(`user:${userId}`);
 
+    const connectedAt = new Date();
     await User.update(
-      { isOnline: true, lastActive: new Date() },
+      {
+        ...(isFirstActiveConnection ? { isOnline: true } : {}),
+        lastActive: connectedAt,
+      },
       { where: { id: userId } },
     );
-    io.emit("user_presence", {
-      userId,
-      status: "online",
-      lastActive: new Date(),
-    });
+
+    if (isFirstActiveConnection) {
+      await emitPresenceUpdate({
+        userId,
+        status: "online",
+        lastActive: connectedAt,
+      });
+    }
 
     // Mark undelivered channel messages as delivered
     try {
@@ -182,15 +239,12 @@ export const initializeSocket = (server: HttpServer): Server => {
             },
           );
           for (const msg of undeliveredMessages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("message_status_update", {
-                messageId: msg.id,
-                channelId: msg.channelId,
-                status: "delivered",
-                deliveredAt: now,
-              });
-            }
+            io.to(`user:${msg.senderId}`).emit("message_status_update", {
+              messageId: msg.id,
+              channelId: msg.channelId,
+              status: "delivered",
+              deliveredAt: now,
+            });
           }
         }
       }
@@ -227,15 +281,12 @@ export const initializeSocket = (server: HttpServer): Server => {
             },
           );
           for (const msg of undeliveredDmMessages) {
-            const senderSocketId = userSockets.get(msg.senderId);
-            if (senderSocketId) {
-              io.to(senderSocketId).emit("dm_message_status_update", {
-                messageId: msg.id,
-                dmId: msg.dmId,
-                status: "delivered",
-                deliveredAt: now,
-              });
-            }
+            io.to(`user:${msg.senderId}`).emit("dm_message_status_update", {
+              messageId: msg.id,
+              dmId: msg.dmId,
+              status: "delivered",
+              deliveredAt: now,
+            });
           }
         }
       }
@@ -770,9 +821,8 @@ export const initializeSocket = (server: HttpServer): Server => {
           startedAt: new Date(),
         });
 
-        const receiverSocketId = userSockets.get(receiverId);
-        if (receiverSocketId) {
-          io.to(receiverSocketId).emit("call_incoming", {
+        if (getActiveConnectionCount(receiverId) > 0) {
+          io.to(`user:${receiverId}`).emit("call_incoming", {
             callId,
             callerId: userId,
             type,
@@ -792,24 +842,20 @@ export const initializeSocket = (server: HttpServer): Server => {
         socket.emit("error", { message: "Call not found" });
         return;
       }
-      const callerSocketId = userSockets.get(call.callerId);
-      if (callerSocketId)
-        io.to(callerSocketId).emit("call_accepted", {
-          callId: data.callId,
-          acceptedBy: userId,
-        });
+      io.to(`user:${call.callerId}`).emit("call_accepted", {
+        callId: data.callId,
+        acceptedBy: userId,
+      });
     });
 
     socket.on("call_reject", (data: { callId: string; reason?: string }) => {
       const call = activeCalls.get(data.callId);
       if (!call) return;
-      const callerSocketId = userSockets.get(call.callerId);
-      if (callerSocketId)
-        io.to(callerSocketId).emit("call_rejected", {
-          callId: data.callId,
-          rejectedBy: userId,
-          reason: data.reason || "Call declined",
-        });
+      io.to(`user:${call.callerId}`).emit("call_rejected", {
+        callId: data.callId,
+        rejectedBy: userId,
+        reason: data.reason || "Call declined",
+      });
       activeCalls.delete(data.callId);
     });
 
@@ -818,37 +864,31 @@ export const initializeSocket = (server: HttpServer): Server => {
       if (!call) return;
       const otherUserId =
         call.callerId === userId ? call.receiverId : call.callerId;
-      const otherSocketId = userSockets.get(otherUserId);
-      if (otherSocketId)
-        io.to(otherSocketId).emit("call_ended", {
-          callId: data.callId,
-          endedBy: userId,
-        });
+      io.to(`user:${otherUserId}`).emit("call_ended", {
+        callId: data.callId,
+        endedBy: userId,
+      });
       activeCalls.delete(data.callId);
     });
 
     socket.on("call_offer", (data: { callId: string; offer: any }) => {
       const call = activeCalls.get(data.callId);
       if (!call) return;
-      const receiverSocketId = userSockets.get(call.receiverId);
-      if (receiverSocketId)
-        io.to(receiverSocketId).emit("call_offer", {
-          callId: data.callId,
-          offer: data.offer,
-          callerId: userId,
-        });
+      io.to(`user:${call.receiverId}`).emit("call_offer", {
+        callId: data.callId,
+        offer: data.offer,
+        callerId: userId,
+      });
     });
 
     socket.on("call_answer", (data: { callId: string; answer: any }) => {
       const call = activeCalls.get(data.callId);
       if (!call) return;
-      const callerSocketId = userSockets.get(call.callerId);
-      if (callerSocketId)
-        io.to(callerSocketId).emit("call_answer", {
-          callId: data.callId,
-          answer: data.answer,
-          answererId: userId,
-        });
+      io.to(`user:${call.callerId}`).emit("call_answer", {
+        callId: data.callId,
+        answer: data.answer,
+        answererId: userId,
+      });
     });
 
     socket.on("ice_candidate", (data: { callId: string; candidate: any }) => {
@@ -856,13 +896,11 @@ export const initializeSocket = (server: HttpServer): Server => {
       if (!call) return;
       const otherUserId =
         call.callerId === userId ? call.receiverId : call.callerId;
-      const otherSocketId = userSockets.get(otherUserId);
-      if (otherSocketId)
-        io.to(otherSocketId).emit("ice_candidate", {
-          callId: data.callId,
-          candidate: data.candidate,
-          from: userId,
-        });
+      io.to(`user:${otherUserId}`).emit("ice_candidate", {
+        callId: data.callId,
+        candidate: data.candidate,
+        from: userId,
+      });
     });
 
     socket.on(
@@ -876,14 +914,12 @@ export const initializeSocket = (server: HttpServer): Server => {
         if (!call) return;
         const otherUserId =
           call.callerId === userId ? call.receiverId : call.callerId;
-        const otherSocketId = userSockets.get(otherUserId);
-        if (otherSocketId)
-          io.to(otherSocketId).emit("call_media_toggled", {
-            callId: data.callId,
-            userId,
-            mediaType: data.mediaType,
-            enabled: data.enabled,
-          });
+        io.to(`user:${otherUserId}`).emit("call_media_toggled", {
+          callId: data.callId,
+          userId,
+          mediaType: data.mediaType,
+          enabled: data.enabled,
+        });
       },
     );
 
@@ -891,10 +927,14 @@ export const initializeSocket = (server: HttpServer): Server => {
 
     socket.on("disconnect", async (reason) => {
       console.log(`❌ USER DISCONNECTED: ${userId} | reason: ${reason}`);
-      userSockets.delete(userId);
+      const disconnectedAt = new Date();
+      const isLastActiveConnection = removeUserSocket(userId, socket.id);
 
       await User.update(
-        { isOnline: false, lastActive: new Date() },
+        {
+          ...(isLastActiveConnection ? { isOnline: false } : {}),
+          lastActive: disconnectedAt,
+        },
         { where: { id: userId } },
       );
 
@@ -914,22 +954,22 @@ export const initializeSocket = (server: HttpServer): Server => {
         if (call.callerId === userId || call.receiverId === userId) {
           const otherUserId =
             call.callerId === userId ? call.receiverId : call.callerId;
-          const otherSocketId = userSockets.get(otherUserId);
-          if (otherSocketId)
-            io.to(otherSocketId).emit("call_ended", {
-              callId,
-              endedBy: userId,
-              reason: "disconnected",
-            });
+          io.to(`user:${otherUserId}`).emit("call_ended", {
+            callId,
+            endedBy: userId,
+            reason: "disconnected",
+          });
           activeCalls.delete(callId);
         }
       }
 
-      io.emit("user_presence", {
-        userId,
-        status: "offline",
-        lastActive: new Date(),
-      });
+      if (isLastActiveConnection) {
+        await emitPresenceUpdate({
+          userId,
+          status: "offline",
+          lastActive: disconnectedAt,
+        });
+      }
     });
   });
 
@@ -959,4 +999,5 @@ export const getOnlineChannelUsers = (channelId: string): string[] =>
 export const getOnlineDmUsers = (dmId: string): string[] =>
   Array.from(dmUsers.get(dmId) || []);
 export const isUserOnline = (userId: string): boolean =>
-  userSockets.has(userId);
+  getActiveConnectionCount(userId) > 0;
+

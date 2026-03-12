@@ -8,6 +8,8 @@ import {
   buildAttachmentFromUpload,
   formatMessagePayload,
   formatMediaPayload,
+  normalizeAttachmentInput,
+  normalizeAudioInput,
   normalizePoll,
   parseDurationSeconds,
 } from '../utils/messagePayload';
@@ -363,7 +365,12 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
     const userId = req.user!.id;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
 
-    if (!text && !files?.attachments?.length && !files?.audio?.length && !poll) {
+    const trimmedText = typeof text === 'string' ? text.trim() : '';
+    const bodyAttachments = normalizeAttachmentInput(req.body.attachments);
+    const bodyAudio = normalizeAudioInput(req.body.audio);
+    const normalizedPoll = normalizePoll(poll);
+
+    if (!trimmedText && !bodyAttachments.length && !bodyAudio && !files?.attachments?.length && !files?.audio?.length && !normalizedPoll) {
       res.status(400).json({ error: 'Message must have content' });
       return;
     }
@@ -411,17 +418,25 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
     const messageData: any = {
       dmId: dm.id,
       senderId: userId,
-      text: text ? String(text).trim() : null,
+      text: trimmedText || null,
     };
 
-    if (files?.attachments?.length) {
-      const attachments = await Promise.all(
-        files.attachments.map(async (file) => {
-          const uploadResult = await uploadToCloudinary(file.buffer, 'attachments', file.mimetype.startsWith('image/') ? 'image' : (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) ? 'video' : 'auto');
-          return buildAttachmentFromUpload(file, uploadResult);
-        })
-      );
-      messageData.attachments = attachments;
+    const attachmentUploads = files?.attachments?.length
+      ? await Promise.all(
+          files.attachments.map(async (file) => {
+            const uploadResult = await uploadToCloudinary(
+              file.buffer,
+              'attachments',
+              file.mimetype.startsWith('image/') ? 'image' : (file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/')) ? 'video' : 'auto',
+            );
+            return buildAttachmentFromUpload(file, uploadResult);
+          })
+        )
+      : [];
+
+    const combinedAttachments = [...bodyAttachments, ...attachmentUploads];
+    if (combinedAttachments.length) {
+      messageData.attachments = combinedAttachments;
     }
 
     if (files?.audio?.length) {
@@ -434,21 +449,15 @@ export const sendDm = async (req: AuthRequest, res: Response): Promise<void> => 
           parseDurationSeconds(uploadResult.duration),
         thumbnailUrl: null,
       });
+    } else if (bodyAudio) {
+      messageData.audio = bodyAudio;
     }
 
-    if (poll) {
-      try {
-        const pollData = typeof poll === 'string' ? JSON.parse(poll) : poll;
-        const normalizedPoll = normalizePoll(pollData);
-        if (normalizedPoll) {
-          messageData.poll = {
-            options: normalizedPoll.options,
-            votes: Object.fromEntries(normalizedPoll.options.map((option) => [option, []])),
-          };
-        }
-      } catch {
-        // Ignore invalid poll payloads to preserve permissive existing behavior.
-      }
+    if (normalizedPoll) {
+      messageData.poll = {
+        options: normalizedPoll.options,
+        votes: Object.fromEntries(normalizedPoll.options.map((option) => [option, []])),
+      };
     }
 
     const message = await Message.create(messageData);
@@ -584,9 +593,18 @@ export const getDmMessages = async (req: AuthRequest, res: Response): Promise<vo
     });
 
     const formattedMessages = messages.map((msg: any) => formatMessagePayload(msg, userId));
+    const unreadCount = membership
+      ? await countDmUnread({
+          dmId: dm.id,
+          userId,
+          lastReadAt: membership.lastReadAt,
+          clearedAt: membership.clearedAt,
+        })
+      : 0;
 
     res.json({
       messages: formattedMessages.reverse(),
+      unreadCount,
       pagination: {
         total: count,
         page: Number(page),

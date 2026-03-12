@@ -18,6 +18,22 @@ export const uploadToCloudinary = async (
   folder: string,
   resourceType: 'image' | 'video' | 'raw' | 'auto' = 'auto'
 ): Promise<UploadResult> => {
+  if (process.env.NODE_ENV === 'test') {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    return {
+      url: `https://example.test/rad5-comms/${folder}/${suffix}`,
+      publicId: `test/${folder}/${suffix}`,
+      type: resourceType === 'auto' ? 'raw' : resourceType,
+      bytes: buffer.length,
+      duration: null,
+      format: null,
+      originalFilename: null,
+      width: null,
+      height: null,
+    };
+  }
+
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
@@ -64,3 +80,4 @@ export const getFileType = (mimetype: string): 'image' | 'audio' | 'video' | 'fi
   if (mimetype.startsWith('video/')) return 'video';
   return 'file';
 };
+

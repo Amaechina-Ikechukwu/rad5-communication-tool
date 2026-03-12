@@ -4,6 +4,10 @@
 >
 > Socket.IO server is at `NEXT_PUBLIC_API_URL/ws`. Auth uses JWT passed as `?token=` query param.
 
+> Initial history responses for `GET /api/channels/:channelId/messages` and `GET /api/dms/:recipientId/messages` now include `unreadCount` for badge hydration.
+>
+> Presence transitions sent over `user_presence` can also be mirrored by the backend to configured outbound presence webhooks.
+
 ---
 
 ## Setup

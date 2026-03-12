@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "RAD5 Communication Tool API",
-    "description": "A real-time communication platform API supporting messaging, channels, file sharing, video/audio calls, polls, and user management. Includes WebSocket support for real-time events via Socket.IO.",
+    "description": "A real-time communication platform API supporting messaging, channels, file sharing, video/audio calls, polls, and user management. Includes WebSocket support for real-time events via Socket.IO. New signups automatically join the General channel, message history responses include unread counts, and DM/channel sends support either multipart uploads or pre-uploaded attachment metadata.",
     "version": "2.0.0",
     "contact": {
       "name": "RAD5 Team"
@@ -47,7 +47,7 @@
           "Auth"
         ],
         "summary": "Create a new user account",
-        "description": "Register a new user with name, email, and password.",
+        "description": "Register a new user with name, email, and password. Successful signup automatically enrolls the user in the General channel.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1606,7 +1606,7 @@
           "Channels"
         ],
         "summary": "Add a member to channel",
-        "description": "Add a user as a member of the channel. Only admins can add members.",
+        "description": "Add a user as a member of the channel. Only admins can add members. The response includes the added member's hydrated channel payload so the client can render it immediately.",
         "security": [
           {
             "BearerAuth": []
@@ -1645,23 +1645,17 @@
         },
         "responses": {
           "201": {
-            "description": "Member added",
+            "description": "Member added and hydrated channel payload returned",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Member added successfully"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AddChannelMemberResponse"
                 }
               }
             }
           },
-          "400": {
-            "description": "User is already a member",
+          "403": {
+            "description": "Only admins can add members",
             "content": {
               "application/json": {
                 "schema": {
@@ -1670,8 +1664,18 @@
               }
             }
           },
-          "403": {
-            "description": "Only admins can add members",
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "User is already a member",
             "content": {
               "application/json": {
                 "schema": {
@@ -2136,7 +2140,7 @@
           "Messages"
         ],
         "summary": "Get channel messages",
-        "description": "Get paginated messages from a channel. Includes sender info, reactions, attachments, audio, polls, and message status.",
+        "description": "Get paginated messages from a channel. Includes sender info, reactions, attachments, audio, polls, message status, and the current unread count.",
         "security": [
           {
             "BearerAuth": []
@@ -2167,26 +2171,24 @@
               "type": "integer",
               "default": 50
             }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Return messages created before this timestamp."
           }
         ],
         "responses": {
           "200": {
-            "description": "List of messages",
+            "description": "List of channel messages and unread count",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "messages": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Message"
-                      }
-                    },
-                    "pagination": {
-                      "$ref": "#/components/schemas/Pagination"
-                    }
-                  }
+                  "$ref": "#/components/schemas/MessageHistoryResponse"
                 }
               }
             }
@@ -2207,8 +2209,8 @@
         "tags": [
           "Messages"
         ],
-        "summary": "Send a message",
-        "description": "Send a message to a channel. Supports text, file attachments, audio/voice notes, and polls via multipart form data.",
+        "summary": "Send a channel message",
+        "description": "Send a message to a channel. Supports either multipart uploads (`attachments`, `audio`) or JSON payloads that already contain attachment/audio metadata, plus polls.",
         "security": [
           {
             "BearerAuth": []
@@ -2226,32 +2228,16 @@
           }
         ],
         "requestBody": {
+          "required": false,
           "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreateJson"
+              }
+            },
             "multipart/form-data": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "description": "Message text content"
-                  },
-                  "files": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "format": "binary"
-                    },
-                    "description": "File attachments (images, documents, etc.)"
-                  },
-                  "audio": {
-                    "type": "string",
-                    "description": "JSON string: {\"url\": \"string\", \"duration\": \"string\"}"
-                  },
-                  "poll": {
-                    "type": "string",
-                    "description": "JSON string: {\"options\": [\"Option A\", \"Option B\"]}"
-                  }
-                }
+                "$ref": "#/components/schemas/MessageCreateMultipart"
               }
             }
           }
@@ -2262,18 +2248,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "$ref": "#/components/schemas/Message"
-                    }
-                  }
+                  "$ref": "#/components/schemas/SendChannelMessageResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Message must have text, file, audio, or poll content",
+            "description": "At least one of text, attachments, audio, or poll is required",
             "content": {
               "application/json": {
                 "schema": {
@@ -2987,7 +2968,7 @@
           "Direct Messages"
         ],
         "summary": "Get DM messages",
-        "description": "Returns paginated messages from a DM conversation.",
+        "description": "Returns paginated messages from a DM conversation, plus the current unread count for the authenticated user. The path accepts either a recipient user ID or an existing DM conversation ID.",
         "security": [
           {
             "BearerAuth": []
@@ -3032,28 +3013,24 @@
         ],
         "responses": {
           "200": {
-            "description": "DM messages",
+            "description": "DM messages and unread count",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "messages": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Message"
-                      }
-                    },
-                    "pagination": {
-                      "$ref": "#/components/schemas/Pagination"
-                    }
-                  }
+                  "$ref": "#/components/schemas/MessageHistoryResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "DM conversation not found"
+            "description": "DM conversation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -3061,8 +3038,8 @@
         "tags": [
           "Direct Messages"
         ],
-        "summary": "Send a DM",
-        "description": "Send a direct message to a user. Creates the DM conversation if it doesn't exist.",
+        "summary": "Send a direct message",
+        "description": "Send a direct message to a user or an existing DM conversation. If the DM does not exist yet, it is created automatically. Supports multipart uploads or JSON attachment/audio metadata, plus polls.",
         "security": [
           {
             "BearerAuth": []
@@ -3081,57 +3058,50 @@
           }
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": [
-                  "text"
-                ],
-                "properties": {
-                  "text": {
-                    "type": "string",
-                    "example": "Hey, how's it going?"
-                  }
-                }
+                "$ref": "#/components/schemas/MessageCreateJson"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreateMultipart"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Message sent",
+            "description": "Direct message sent",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/Message"
-                    },
-                    "dm": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        }
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/SendDmMessageResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid input"
+            "description": "At least one of text, attachments, audio, or poll is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
           "404": {
-            "description": "User not found"
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -4648,6 +4618,158 @@
           "unreadCount": {
             "type": "integer",
             "example": 1
+          }
+        }
+      },
+      "PollInput": {
+        "type": "object",
+        "required": [
+          "options"
+        ],
+        "properties": {
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "Poll options. Empty strings are ignored by the API normalizer."
+          }
+        }
+      },
+      "MessageCreateJson": {
+        "type": "object",
+        "minProperties": 1,
+        "description": "JSON message payload. Provide at least one of text, attachments, audio, or poll.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Message text content."
+          },
+          "attachments": {
+            "type": "array",
+            "description": "Already-uploaded attachment metadata. Each item should include a reachable URL and type metadata.",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          },
+          "audio": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Attachment"
+              }
+            ],
+            "nullable": true,
+            "description": "Already-uploaded audio attachment metadata."
+          },
+          "poll": {
+            "$ref": "#/components/schemas/PollInput"
+          }
+        }
+      },
+      "MessageCreateMultipart": {
+        "type": "object",
+        "minProperties": 1,
+        "description": "Multipart message payload. Provide at least one of text, attachments, audio, or poll.",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Message text content."
+          },
+          "attachments": {
+            "type": "array",
+            "description": "Binary files to upload with the message.",
+            "items": {
+              "type": "string",
+              "format": "binary"
+            }
+          },
+          "audio": {
+            "type": "string",
+            "format": "binary",
+            "description": "Single audio file/voice note."
+          },
+          "audioDuration": {
+            "oneOf": [
+              {
+                "type": "string",
+                "example": "12"
+              },
+              {
+                "type": "number",
+                "example": 12
+              }
+            ],
+            "description": "Optional duration override in seconds or mm:ss / hh:mm:ss format."
+          },
+          "poll": {
+            "type": "string",
+            "description": "JSON string such as {\"options\":[\"Yes\",\"No\"]}.",
+            "example": "{\"options\":[\"Yes\",\"No\"]}"
+          }
+        }
+      },
+      "MessageHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "description": "Unread messages remaining in this conversation for the current user.",
+            "example": 0
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "SendChannelMessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Message sent"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Message"
+          }
+        }
+      },
+      "SendDmMessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Direct message sent"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Message"
+          },
+          "dm": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      },
+      "AddChannelMemberResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Member added successfully"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/Channel"
           }
         }
       }

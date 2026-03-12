@@ -82,6 +82,35 @@ describe('Message Endpoints', () => {
     });
   });
 
+  describe('POST /api/channels/:channelId/messages - multipart media', () => {
+    it('should send channel media, files, audio, and polls in one request', async () => {
+      const formData = new FormData();
+      formData.set('text', 'Multipart channel payload');
+      formData.set('poll', JSON.stringify({ options: ['Ship it', 'Hold'] }));
+      formData.set('audioDuration', '12');
+      formData.append('attachments', new Blob(['image-bytes'], { type: 'image/png' }), 'photo.png');
+      formData.append('attachments', new Blob(['file-bytes'], { type: 'application/pdf' }), 'brief.pdf');
+      formData.append('audio', new Blob(['audio-bytes'], { type: 'audio/webm' }), 'note.webm');
+
+      const response = await fetch(`${baseUrl}/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: formData,
+      });
+
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(201);
+      expect(data.data.attachments).toHaveLength(2);
+      expect(data.data.attachments.some((attachment: any) => attachment.type === 'image')).toBe(true);
+      expect(data.data.attachments.some((attachment: any) => attachment.type === 'file')).toBe(true);
+      expect(data.data.audio.type).toBe('audio');
+      expect(data.data.audio.duration).toBe(12);
+      expect(data.data.poll.options).toEqual(['Ship it', 'Hold']);
+    });
+  });
   describe('GET /api/channels/:channelId/messages', () => {
     it('should get channel messages', async () => {
       const response = await fetch(`${baseUrl}/channels/${channelId}/messages`, {
@@ -241,3 +270,4 @@ describe('Message Endpoints', () => {
     });
   });
 });
+

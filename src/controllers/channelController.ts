@@ -29,13 +29,20 @@ const buildRealtimeChannelForUser = async (channelId: string, userId: string) =>
     return null;
   }
 
+  const unreadCount = await countChannelUnread({
+    channelId,
+    userId,
+    lastReadAt: membership.lastReadAt,
+    clearedAt: membership.clearedAt,
+  });
+
   return {
     ...(membership as any).channel.toJSON(),
     role: membership.role,
     isArchived: membership.isArchived,
     isStarred: membership.isStarred,
     isMuted: membership.isMuted,
-    unreadCount: 0,
+    unreadCount,
   };
 };
 
@@ -159,6 +166,7 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
       channelId: channel.id,
       userId,
       role: 'admin',
+      lastReadAt: new Date(),
     });
 
     // Add other members
@@ -170,6 +178,7 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
             channelId: channel.id,
             userId: memberId,
             role: 'member',
+            lastReadAt: new Date(),
           })
         );
       await Promise.all(memberPromises);
@@ -186,6 +195,8 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
         },
       ],
     });
+
+    const responseChannel = await buildRealtimeChannelForUser(channel.id, userId);
 
     try {
       const io = getIO();
@@ -209,7 +220,7 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
     }
     res.status(201).json({
       message: 'Channel created successfully',
-      channel: channelWithMembers,
+      channel: responseChannel || channelWithMembers,
     });
   } catch (error) {
     console.error('Create channel error:', error);
@@ -322,6 +333,7 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
       channelId: id as string,
       userId: newMemberId,
       role: 'member',
+      lastReadAt: new Date(),
     });
 
     try {
@@ -335,7 +347,8 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
     } catch (e) {
       console.error('Socket broadcast error (channel_created):', e);
     }
-    res.status(201).json({ message: 'Member added successfully' });
+    const addedChannel = await buildRealtimeChannelForUser(id as string, newMemberId);
+    res.status(201).json({ message: 'Member added successfully', channel: addedChannel });
   } catch (error) {
     console.error('Add member error:', error);
     res.status(500).json({ error: 'Failed to add member' });

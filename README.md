@@ -1,115 +1,198 @@
 # RAD5 Communication Tool
 
-A real-time communication platform API supporting messaging, channels, file sharing, and user management.
+A real-time communication API for team chat, direct messages, channels, media sharing, polls, presence, and call signaling.
 
-## Features
+## Current capabilities
 
-- **Authentication**: Signup (automatic "General" channel join), login, password reset with JWT tokens
-- **User Management**: Profile updates, privacy settings, notification preferences, searchable user directory with unread counts and DM status tracking
-- **Channels**: Group chats, 1-on-1 personal messaging (including self-messaging), admin controls, unread counts
-- **Organization**: Archive, star, and mute channels with toggle or explicit setting controls
-- **Messaging**: Text messages, file attachments, audio messages, polls, reactions
-- **Real-time**: WebSocket support for live updates
+- Auth with signup, login, OTP/password reset, and JWT sessions.
+- Automatic enrollment of every new user into the `General` channel.
+- Group channels with member management, archive/star/mute settings, unread counts, and media/file history.
+- Direct messages with unread counts, archive/star/mute settings, media support, and poll voting.
+- Message delivery, read receipts, reactions, edits, deletes, and websocket fan-out.
+- File/image/video/audio sharing through multipart uploads or structured attachment payloads.
+- Presence updates over Socket.IO and outbound presence webhooks.
 
-## Installation
+## Recent backend changes
 
-bash
+- New users are now always added to `General`, and startup backfills missing `General` memberships for older users.
+- Adding a user to a channel now returns a ready-to-render channel payload, and the added user can immediately see that channel in their sidebar.
+- Channel and DM list/detail payloads consistently include unread counts.
+- `GET /api/channels/:channelId/messages` and `GET /api/dms/:recipientId/messages` now return `unreadCount` alongside paginated messages.
+- Channel and DM send endpoints now accept either:
+  - `multipart/form-data` with `attachments`, `audio`, `poll`, `audioDuration`
+  - JSON payloads that already contain normalized `attachments`, `audio`, and `poll`
+- Socket-driven presence changes (`online` / `offline`) are now mirrored to webhooks.
+
+## Install
+
+```bash
 bun install
+```
 
-## Environment Variables
+## Environment
 
-Create a `.env` file with:
+Create a `.env` file similar to this:
 
-env
+```env
 PORT=3000
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=rad5_comms
-DB_USER=postgres
-DB_PASSWORD=your_password
-JWT_SECRET=your_jwt_secret
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
+NODE_ENV=development
+DATABASE_URL=postgresql://postgres:password@localhost:5432/rad5_communication
+DB_SSL=false
+
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=7d
+
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
-SMTP_USER=your_email
-SMTP_PASS=your_password
-FRONTEND_URL=http://localhost:3000
+SMTP_USER=your-email@example.com
+SMTP_PASS=your-email-password
+SMTP_FROM=noreply@rad5comms.com
 
-## Running
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
 
-bash
-# Development
+FRONTEND_URL=http://localhost:3001
+ALLOWED=http://localhost:3000,http://localhost:3001,http://localhost:5173
+
+PRESENCE_WEBHOOK_URLS=
+PRESENCE_WEBHOOK_AUTH_TOKEN=
+PRESENCE_WEBHOOK_SECRET=
+```
+
+### Presence webhooks
+
+Set `PRESENCE_WEBHOOK_URLS` to one or more comma-separated URLs to receive presence changes.
+
+Each webhook is sent as `POST application/json` with this shape:
+
+```json
+{
+  "event": "user.presence.updated",
+  "occurredAt": "2026-03-12T10:00:00.000Z",
+  "data": {
+    "userId": "uuid",
+    "status": "online",
+    "isOnline": true,
+    "lastActive": "2026-03-12T10:00:00.000Z",
+    "activeConnections": 1
+  }
+}
+```
+
+Optional headers:
+
+- `Authorization: Bearer <PRESENCE_WEBHOOK_AUTH_TOKEN>`
+- `x-rad5-webhook-secret: <PRESENCE_WEBHOOK_SECRET>`
+
+## Run
+
+```bash
 bun run dev
-
-# Production
 bun run start
+```
 
-## API Documentation
+## API docs
 
-Interactive Swagger documentation is available at:
+Swagger UI is available at [http://localhost:3000/api-docs](http://localhost:3000/api-docs).
 
-http://localhost:3000/api-docs
-
-## API Endpoints
+## Endpoint notes
 
 ### Auth
-- `POST /api/auth/signup` - Create a new account (automatically joins "General" channel)
-- `POST /api/auth/login` - Login to existing account
-- `POST /api/auth/forgot-password` - Request password reset
-- `POST /api/auth/reset-password` - Reset password with token
+
+- `POST /api/auth/signup`
+  - Creates the user.
+  - Automatically adds the user to `General`.
+- `POST /api/auth/login`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/verify-otp`
+- `POST /api/auth/reset-password`
+- `POST /api/auth/resend-otp`
 
 ### Users
-- `GET /api/users` - Get all users (searchable by name/email; includes unread counts and DM status indicators)
-- `GET /api/users/me` - Get current user (includes total unread count)
-- `GET /api/users/:id` - Get user by ID
-- `PUT /api/users/profile` - Update profile
-- `PUT /api/users/privacy` - Update privacy settings
-- `PUT /api/users/notifications` - Update notification settings
+
+- `GET /api/users`
+  - Returns searchable users plus DM metadata and unread counts.
+- `GET /api/users/me`
+  - Returns the current user plus total unread count.
+- `PUT /api/users/profile`
+- `PUT /api/users/privacy`
+- `PUT /api/users/notifications`
 
 ### Channels
-- `GET /api/channels` - Get user's channels (supports search and filters: starred, archived, muted, unread, groups, personal, active)
-- `POST /api/channels` - Create a new channel
-- `GET /api/channels/:id` - Get channel details
-- `GET /api/channels/personal/:recipientId` - Get or create a 1-on-1 personal chat (supports self-chat)
-- `POST /api/channels/personal/:recipientId` - Create or get a 1-on-1 personal chat
-- `GET /api/channels/personal/:recipientId/messages` - Get messages from a personal chat
-- `POST /api/channels/personal/:recipientId/messages` - Send a direct message (creates chat if needed)
-- `POST /api/channels/personal/:recipientId/archive` - Toggle personal chat archive status
-- `POST /api/channels/personal/:recipientId/star` - Toggle personal chat star status
-- `POST /api/channels/personal/:recipientId/mute` - Toggle personal chat mute status
-- `PATCH /api/channels/personal/:recipientId/settings` - Update personal chat settings (archive, star, mute)
-- `POST /api/channels/:id/members` - Add member (admin only)
-- `DELETE /api/channels/:id/members/:memberId` - Remove member (admin only)
-- `POST /api/channels/:id/archive` - Toggle channel archive status
-- `POST /api/channels/:id/star` - Toggle channel star status
-- `POST /api/channels/:id/mute` - Toggle channel mute status
-- `PATCH /api/channels/:id/settings` - Update channel settings (archive, star, mute)
-- `POST /api/channels/:id/read` - Mark channel as read
+
+- `GET /api/channels`
+  - Includes `isArchived`, `isStarred`, `isMuted`, and `unreadCount`.
+- `POST /api/channels`
+  - Creates a group channel and emits `channel_created` to invited members.
+- `GET /api/channels/:id`
+  - Includes members, `unreadCount`, media, and flattened file attachments.
+- `POST /api/channels/:id/members`
+  - Adds a member and returns the added member's channel payload.
+- `POST /api/channels/:id/read`
+- `PATCH /api/channels/:id/settings`
+- `DELETE /api/channels/:id/messages`
+- `DELETE /api/channels/:id`
+
+### Direct messages
+
+- `GET /api/dms`
+  - Returns DM conversations with participant info and `unreadCount`.
+- `GET /api/dms/:recipientId`
+  - Accepts a recipient user ID or an existing DM ID.
+- `POST /api/dms/:recipientId/messages`
+  - Supports text, multipart attachments/audio, or structured attachment/audio JSON, plus polls.
+- `GET /api/dms/:recipientId/messages`
+  - Returns paginated messages plus `unreadCount`.
+- `POST /api/dms/:recipientId/read`
+- `PATCH /api/dms/:recipientId/settings`
+- `DELETE /api/dms/:recipientId/messages`
 
 ### Messages
-- `GET /api/channels/:channelId/messages` - Get channel messages
-- `POST /api/channels/:channelId/messages` - Send a message
-- `PUT /api/messages/:id` - Edit message (within 20 min)
-- `DELETE /api/messages/:id` - Delete message
-- `POST /api/messages/:id/reactions` - Add/toggle reaction
-- `POST /api/upload` - Upload a file
 
-### WebSocket
-Connect to `ws://localhost:3000/ws` for real-time updates.
+- `POST /api/channels/:channelId/messages`
+  - Supports text, multipart attachments/audio, or structured attachment/audio JSON, plus polls.
+- `GET /api/channels/:channelId/messages`
+  - Returns paginated messages plus `unreadCount`.
+- `GET /api/channels/:channelId/media`
+- `POST /api/messages/:id/poll/vote`
+- `POST /api/messages/:id/reactions`
+- `PATCH /api/messages/:id/status`
+- `POST /api/messages/upload`
+- `POST /api/upload`
 
-## Testing
+## WebSocket
 
-bash
+Connect with Socket.IO at `ws://<host>/ws` using `?token=<jwt>`.
+
+Important realtime events:
+
+- `user_presence`
+- `channel_created`
+- `dm_created`
+- `unread_update`
+- `new_message`
+- `new_dm_message`
+- `message_status_update`
+- `dm_message_status_update`
+- `poll_update`
+- `reaction_update`
+- `dm_reaction_update`
+- call signaling events (`call_incoming`, `call_offer`, `call_answer`, `ice_candidate`, `call_ended`)
+
+See [WEBSOCKET_INTEGRATION.md](WEBSOCKET_INTEGRATION.md) for frontend usage patterns.
+
+## Test
+
+```bash
 bun test
+```
 
-## Tech Stack
+## Stack
 
-- **Runtime**: Bun
-- **Framework**: Express.js
-- **Database**: PostgreSQL with Sequelize ORM
-- **Authentication**: JWT
-- **File Storage**: Cloudinary
-- **Real-time**: Socket.io
-- **Documentation**: Swagger/OpenAPI
+- Bun
+- Express
+- PostgreSQL + Sequelize
+- Socket.IO
+- Cloudinary
+- Swagger UI

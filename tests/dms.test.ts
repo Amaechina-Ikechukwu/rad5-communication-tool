@@ -151,6 +151,67 @@ describe('Direct Messages Endpoints', () => {
       expect(voteData.poll.votes.Yes).toContain(otherUserId);
     });
 
+
+    it('should send a DM with structured attachments, audio, and poll payloads', async () => {
+      const response = await fetch(`${baseUrl}/dms/${otherUserId}/messages`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: 'Structured DM payload',
+          attachments: [
+            {
+              name: 'poster.png',
+              url: 'https://example.com/poster.png',
+              type: 'image',
+              mimeType: 'image/png',
+              size: 1234,
+              duration: null,
+              thumbnailUrl: 'https://example.com/poster.png',
+            },
+            {
+              name: 'agenda.pdf',
+              url: 'https://example.com/agenda.pdf',
+              type: 'file',
+              mimeType: 'application/pdf',
+              size: 4321,
+              duration: null,
+              thumbnailUrl: null,
+            },
+          ],
+          audio: {
+            name: 'voice-note.webm',
+            url: 'https://example.com/voice-note.webm',
+            type: 'audio',
+            mimeType: 'audio/webm',
+            size: 222,
+            duration: 9,
+            thumbnailUrl: null,
+          },
+          poll: { options: ['Approve', 'Reject'] },
+        }),
+      });
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(201);
+      expect(data.data.attachments).toHaveLength(2);
+      expect(data.data.audio.duration).toBe(9);
+      expect(data.data.poll.options).toEqual(['Approve', 'Reject']);
+
+      const recipientMessagesResponse = await fetch(`${baseUrl}/dms/${userId}/messages`, {
+        headers: { Authorization: `Bearer ${otherUserToken}` },
+      });
+      const recipientMessagesData = await recipientMessagesResponse.json() as any;
+      const structuredMessage = recipientMessagesData.messages.find((message: any) => message.text === 'Structured DM payload');
+
+      expect(recipientMessagesResponse.status).toBe(200);
+      expect(typeof recipientMessagesData.unreadCount).toBe('number');
+      expect(recipientMessagesData.unreadCount).toBeGreaterThan(0);
+      expect(structuredMessage.attachments[0].type).toBe('image');
+      expect(structuredMessage.attachments[1].type).toBe('file');
+    });
     it('should reject empty message text', async () => {
       const response = await fetch(`${baseUrl}/dms/${otherUserId}/messages`, {
         method: 'POST',
@@ -437,3 +498,4 @@ describe('Direct Messages Endpoints', () => {
     });
   });
 });
+

@@ -329,6 +329,36 @@ describe('Channel Endpoints', () => {
       }
     });
   });
+
+  describe('POST /api/channels/:id/members', () => {
+    it('should add a member and expose the channel in the added user list', async () => {
+      const response = await fetch(`${baseUrl}/channels/${channelId}/members`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: otherUserId }),
+      });
+
+      const data = await response.json() as any;
+
+      expect(response.status).toBe(201);
+      expect(data.channel).toBeDefined();
+      expect(data.channel.id).toBe(channelId);
+
+      const addedUserChannelsResponse = await fetch(`${baseUrl}/channels`, {
+        headers: { Authorization: `Bearer ${otherUserToken}` },
+      });
+      const addedUserChannelsData = await addedUserChannelsResponse.json() as any;
+      const addedChannel = addedUserChannelsData.channels.find((channel: any) => channel.id === channelId);
+
+      expect(addedUserChannelsResponse.status).toBe(200);
+      expect(addedChannel).toBeDefined();
+      expect(addedChannel.unreadCount).toBe(0);
+    });
+  });
 });
 
 export { channelId, authToken };
+

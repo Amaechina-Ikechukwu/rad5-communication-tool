@@ -4,6 +4,7 @@ import { User } from '../models';
 import { generateToken } from '../middleware/auth';
 import { isValidEmail, isStrongPassword } from '../utils/validators';
 import { sendPasswordResetEmail, sendWelcomeEmail, sendOtpEmail } from '../utils/email';
+import { ensureUserInGeneralChannel } from '../utils/initializeGeneralChannel';
 
 // POST /api/auth/signup
 export const signup = async (req: Request, res: Response): Promise<void> => {
@@ -41,6 +42,8 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       password,
     });
 
+
+    await ensureUserInGeneralChannel(user.id);
     // Generate token
     const token = generateToken({ id: user.id, email: user.email });
 
@@ -295,3 +298,4 @@ export const resendOtp = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Failed to resend OTP' });
   }
 };
+

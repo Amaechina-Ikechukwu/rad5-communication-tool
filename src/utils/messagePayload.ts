@@ -84,12 +84,22 @@ const buildThumbnailUrl = (
   }
 
   if (type === 'video' && publicId) {
-    return cloudinary.url(publicId, {
-      resource_type: 'video',
-      secure: true,
-      format: 'jpg',
-      transformation: [{ width: 640, height: 640, crop: 'fill' }],
-    });
+    try {
+      const thumbnailUrl = cloudinary.url(publicId, {
+        resource_type: 'video',
+        secure: true,
+        format: 'jpg',
+        transformation: [{ width: 640, height: 640, crop: 'fill' }],
+      });
+
+      if (thumbnailUrl && !thumbnailUrl.includes('undefined')) {
+        return thumbnailUrl;
+      }
+    } catch {
+      // Fall back to the original asset URL when Cloudinary preview generation is unavailable.
+    }
+
+    return url;
   }
 
   return null;
@@ -128,22 +138,45 @@ export const parseDurationSeconds = (value: unknown): number | null => {
   return null;
 };
 
-export const normalizePoll = (value: unknown): PollInfo | null => {
-  if (!value || typeof value !== 'object') {
-    return null;
+const parseSerializedValue = (value: unknown): unknown => {
+  if (typeof value !== 'string') {
+    return value;
   }
 
-  const rawPoll = value as Record<string, unknown>;
-  const options = Array.isArray(rawPoll.options)
-    ? rawPoll.options.filter((option): option is string => typeof option === 'string' && option.trim().length > 0)
-    : [];
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+};
+
+export const normalizePoll = (value: unknown): PollInfo | null => {
+  const parsedValue = parseSerializedValue(value);
+  const pollObject = parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue)
+    ? (parsedValue as Record<string, unknown>)
+    : null;
+
+  const rawOptions = Array.isArray(parsedValue)
+    ? parsedValue
+    : Array.isArray(pollObject?.options)
+      ? pollObject.options
+      : [];
+
+  const options = rawOptions.filter(
+    (option): option is string => typeof option === 'string' && option.trim().length > 0,
+  );
 
   if (!options.length) {
     return null;
   }
 
-  const rawVotes = rawPoll.votes && typeof rawPoll.votes === 'object'
-    ? (rawPoll.votes as Record<string, unknown>)
+  const rawVotes = pollObject?.votes && typeof pollObject.votes === 'object'
+    ? (pollObject.votes as Record<string, unknown>)
     : {};
 
   const votes: Record<string, string[]> = {};
@@ -155,6 +188,21 @@ export const normalizePoll = (value: unknown): PollInfo | null => {
   });
 
   return { options, votes };
+};
+
+export const normalizeAttachmentInput = (value: unknown): MessageAttachment[] => {
+  const parsedValue = parseSerializedValue(value);
+
+  if (Array.isArray(parsedValue)) {
+    return normalizeAttachments(parsedValue);
+  }
+
+  const attachment = normalizeAttachment(parsedValue);
+  return attachment ? [attachment] : [];
+};
+
+export const normalizeAudioInput = (value: unknown): MessageAttachment | null => {
+  return normalizeAudio(parseSerializedValue(value));
 };
 
 export const normalizeAttachment = (value: unknown): MessageAttachment | null => {
@@ -350,3 +398,4 @@ export const flattenMessageAttachments = (messages: any[], mode: 'media' | 'file
 
   return items;
 };
+
