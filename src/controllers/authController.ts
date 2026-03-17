@@ -4,11 +4,16 @@ import { User } from '../models';
 import { generateToken } from '../middleware/auth';
 import { isValidEmail, isStrongPassword } from '../utils/validators';
 import { sendPasswordResetEmail, sendWelcomeEmail, sendOtpEmail } from '../utils/email';
-import { ensureUserInGeneralChannel } from '../utils/initializeGeneralChannel';
+import { ensureUserInDefaultChannels } from '../utils/initializeGeneralChannel';
 
 // POST /api/auth/signup
 export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (process.env.ALLOW_PUBLIC_SIGNUP !== 'true') {
+      res.status(403).json({ error: 'Public signup is disabled. Please contact an administrator.' });
+      return;
+    }
+
     const { name, email, password } = req.body;
 
     // Validation
@@ -40,12 +45,15 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       name,
       email: email.toLowerCase(),
       password,
+      role: 'member',
+      accountStatus: 'active',
+      provisioningSource: 'self_signup',
     });
 
 
-    await ensureUserInGeneralChannel(user.id);
+    await ensureUserInDefaultChannels(user.id);
     // Generate token
-    const token = generateToken({ id: user.id, email: user.email });
+    const token = generateToken({ id: user.id, email: user.email, sessionVersion: user.sessionVersion });
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail(user.email, user.name).catch(console.error);
@@ -78,6 +86,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    if (user.accountStatus !== 'active') {
+      res.status(403).json({ error: 'Your account has been disabled. Contact an administrator.' });
+      return;
+    }
+
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
@@ -89,7 +102,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await user.update({ lastActive: new Date(), isOnline: true });
 
     // Generate token
-    const token = generateToken({ id: user.id, email: user.email });
+    const token = generateToken({ id: user.id, email: user.email, sessionVersion: user.sessionVersion });
 
     res.json({
       message: 'Login successful',
@@ -254,7 +267,11 @@ export const changePassword = async (req: Request & { user?: any }, res: Respons
       return;
     }
 
-    await user.update({ password: newPassword });
+    await user.update({
+      password: newPassword,
+      mustChangePassword: false,
+      sessionVersion: user.sessionVersion + 1,
+    });
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {

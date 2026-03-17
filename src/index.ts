@@ -8,6 +8,7 @@ import { initializeSocket } from './socket';
 import { setIO } from './socket/io';
 import { initializeGeneralChannel } from './utils/initializeGeneralChannel';
 import { migrateDmsFromChannels } from './utils/migrateDmsFromChannels';
+import { seedBootstrapSuperAdmin } from './utils/bootstrapAdmin';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -15,6 +16,7 @@ import userRoutes from './routes/users';
 import channelRoutes from './routes/channels';
 import dmRoutes from './routes/dms';
 import messageRoutes from './routes/messages';
+import adminRoutes from './routes/admin';
 
 // Import Swagger documentation
 import swaggerDocument from '../swagger.json';
@@ -62,6 +64,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/dms', dmRoutes);
 app.use('/api', messageRoutes); // Messages are under /api/channels/:id/messages and /api/messages/:id
+app.use('/api/admin', adminRoutes);
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -98,6 +101,7 @@ setIO(io);
 // Start server function (exported for tests)
 const startServer = async (): Promise<void> => {
   await connectDB();
+  await seedBootstrapSuperAdmin();
   await initializeGeneralChannel(); // Ensure General channel exists on startup
   await migrateDmsFromChannels(); // Migrate existing DMs from channels (one-time, idempotent)
   return new Promise((resolve) => {

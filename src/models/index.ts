@@ -5,6 +5,7 @@ import DirectMessage from './DirectMessage';
 import DirectMessageMember from './DirectMessageMember';
 import Message from './Message';
 import Reaction from './Reaction';
+import AuditLog from './AuditLog';
 
 // User - Channel relationships (many-to-many through ChannelMember)
 User.belongsToMany(Channel, {
@@ -112,4 +113,14 @@ Message.hasMany(Reaction, {
   as: 'reactions',
 });
 
-export { User, Channel, ChannelMember, DirectMessage, DirectMessageMember, Message, Reaction };
+AuditLog.belongsTo(User, {
+  foreignKey: 'actorId',
+  as: 'actor',
+});
+
+User.hasMany(AuditLog, {
+  foreignKey: 'actorId',
+  as: 'auditLogs',
+});
+
+export { User, Channel, ChannelMember, DirectMessage, DirectMessageMember, Message, Reaction, AuditLog };

@@ -5,6 +5,7 @@ import { resolve } from 'path';
 process.env.NODE_ENV = 'test';
 // Use a different port for tests to avoid conflicts
 process.env.PORT = '3334';
+process.env.ALLOW_PUBLIC_SIGNUP = 'true';
 
 // Manually load .env since dotenv may not find it properly in tests
 const envPath = resolve(__dirname, '../.env');

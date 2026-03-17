@@ -1,6 +1,10 @@
 import { DataTypes, Model } from 'sequelize';
 import type { Optional } from 'sequelize';
 import sequelize from '../config/db';
+import {
+  CHANNEL_MEMBERSHIP_POLICIES,
+  type ChannelMembershipPolicy,
+} from '../utils/adminConstants';
 
 interface AttachmentInfo {
   name: string;
@@ -14,12 +18,18 @@ interface ChannelAttributes {
   description: string | null;
   avatar: string | null;
   isGroup: boolean;
+  isSystem: boolean;
+  isDefault: boolean;
+  membershipPolicy: ChannelMembershipPolicy;
   createdBy: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface ChannelCreationAttributes extends Optional<ChannelAttributes, 'id' | 'description' | 'avatar' | 'isGroup'> {}
+interface ChannelCreationAttributes extends Optional<
+  ChannelAttributes,
+  'id' | 'description' | 'avatar' | 'isGroup' | 'isSystem' | 'isDefault' | 'membershipPolicy'
+> {}
 
 class Channel extends Model<ChannelAttributes, ChannelCreationAttributes> implements ChannelAttributes {
   declare id: string;
@@ -27,6 +37,9 @@ class Channel extends Model<ChannelAttributes, ChannelCreationAttributes> implem
   declare description: string | null;
   declare avatar: string | null;
   declare isGroup: boolean;
+  declare isSystem: boolean;
+  declare isDefault: boolean;
+  declare membershipPolicy: ChannelMembershipPolicy;
   declare createdBy: string;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -54,6 +67,21 @@ Channel.init(
     isGroup: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    isSystem: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    isDefault: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    membershipPolicy: {
+      type: DataTypes.ENUM(...CHANNEL_MEMBERSHIP_POLICIES),
+      allowNull: false,
+      defaultValue: 'invite_only',
     },
     createdBy: {
       type: DataTypes.UUID,

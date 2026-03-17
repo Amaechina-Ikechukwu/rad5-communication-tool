@@ -5,6 +5,7 @@ import type { AuthRequest } from '../middleware/auth';
 import { getIO } from '../socket/io';
 import { formatMediaPayload, flattenMessageAttachments } from '../utils/messagePayload';
 import { countChannelUnread } from '../utils/unread';
+import { isProtectedChannel } from '../utils/initializeGeneralChannel';
 
 const buildRealtimeChannelForUser = async (channelId: string, userId: string) => {
   const membership = await ChannelMember.findOne({
@@ -158,6 +159,9 @@ export const createChannel = async (req: AuthRequest, res: Response): Promise<vo
       name,
       description,
       isGroup: true,
+      isSystem: false,
+      isDefault: false,
+      membershipPolicy: 'invite_only',
       createdBy: userId,
     });
 
@@ -284,6 +288,9 @@ export const getChannelDetails = async (req: AuthRequest, res: Response): Promis
       id: channel.id,
       name: channel.name,
       description: channel.description,
+      isSystem: channel.isSystem,
+      isDefault: channel.isDefault,
+      membershipPolicy: channel.membershipPolicy,
       members: channel.get('members'),
       unreadCount,
       media: messages.map((message: any) => formatMediaPayload(message, userId)),
@@ -309,6 +316,17 @@ export const addMember = async (req: AuthRequest, res: Response): Promise<void> 
 
     if (!membership) {
       res.status(403).json({ error: 'Only admins can add members' });
+      return;
+    }
+
+    const channel = await Channel.findByPk(id as string);
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    if (isProtectedChannel(channel)) {
+      res.status(403).json({ error: 'Protected channel membership can only be changed from the admin panel' });
       return;
     }
 
@@ -373,6 +391,17 @@ export const removeMember = async (req: AuthRequest, res: Response): Promise<voi
 
     if (membership.role !== 'admin' && memberId !== userId) {
       res.status(403).json({ error: 'Only admins can remove other members' });
+      return;
+    }
+
+    const channel = await Channel.findByPk(id as string);
+    if (!channel) {
+      res.status(404).json({ error: 'Channel not found' });
+      return;
+    }
+
+    if (isProtectedChannel(channel)) {
+      res.status(403).json({ error: 'Protected channel membership can only be changed from the admin panel' });
       return;
     }
 
@@ -583,6 +612,11 @@ export const leaveChannel = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    if (isProtectedChannel(channel)) {
+      res.status(403).json({ error: 'You cannot leave a protected default/system channel' });
+      return;
+    }
+
     const membership = await ChannelMember.findOne({
       where: { channelId, userId },
     });
@@ -634,6 +668,11 @@ export const deleteChannel = async (req: AuthRequest, res: Response): Promise<vo
 
     if (!channel.isGroup) {
       res.status(400).json({ error: 'Cannot delete a non-group channel this way' });
+      return;
+    }
+
+    if (isProtectedChannel(channel)) {
+      res.status(403).json({ error: 'Protected default/system channels can only be deleted from the admin panel' });
       return;
     }
 

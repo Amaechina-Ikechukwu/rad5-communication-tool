@@ -4,13 +4,15 @@ A real-time communication API for team chat, direct messages, channels, media sh
 
 ## Current capabilities
 
-- Auth with signup, login, OTP/password reset, and JWT sessions.
-- Automatic enrollment of every new user into the `General` channel.
+- Auth with login, OTP/password reset, JWT sessions, session invalidation, and optional public signup.
+- RBAC with `super_admin`, `admin`, `manager`, and `member` roles.
+- Automatic enrollment of every new user into default channels, with `General` enforced as a protected system channel.
 - Group channels with member management, archive/star/mute settings, unread counts, and media/file history.
 - Direct messages with unread counts, archive/star/mute settings, media support, and poll voting.
 - Message delivery, read receipts, reactions, edits, deletes, and websocket fan-out.
 - File/image/video/audio sharing through multipart uploads or structured attachment payloads.
 - Presence updates over Socket.IO and outbound presence webhooks.
+- Admin APIs for user lifecycle, CSV import, channel governance, forced default membership sync, and audit logs.
 
 ## Recent backend changes
 
@@ -41,6 +43,11 @@ DB_SSL=false
 
 JWT_SECRET=your-super-secret-jwt-key-change-in-production
 JWT_EXPIRES_IN=7d
+ALLOW_PUBLIC_SIGNUP=false
+
+BOOTSTRAP_SUPER_ADMIN_NAME=Platform Super Admin
+BOOTSTRAP_SUPER_ADMIN_EMAIL=admin@example.com
+BOOTSTRAP_SUPER_ADMIN_PASSWORD=ChangeMe123!
 
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
@@ -101,8 +108,8 @@ Swagger UI is available at [http://localhost:3000/api-docs](http://localhost:300
 ### Auth
 
 - `POST /api/auth/signup`
-  - Creates the user.
-  - Automatically adds the user to `General`.
+  - Creates the user only when `ALLOW_PUBLIC_SIGNUP=true`.
+  - Automatically adds the user to every default channel.
 - `POST /api/auth/login`
 - `POST /api/auth/forgot-password`
 - `POST /api/auth/verify-otp`
@@ -122,17 +129,37 @@ Swagger UI is available at [http://localhost:3000/api-docs](http://localhost:300
 ### Channels
 
 - `GET /api/channels`
-  - Includes `isArchived`, `isStarred`, `isMuted`, and `unreadCount`.
+  - Includes `isArchived`, `isStarred`, `isMuted`, `unreadCount`, and channel protection flags.
 - `POST /api/channels`
   - Creates a group channel and emits `channel_created` to invited members.
 - `GET /api/channels/:id`
-  - Includes members, `unreadCount`, media, and flattened file attachments.
+  - Includes members, `unreadCount`, media, flattened file attachments, and channel protection flags.
 - `POST /api/channels/:id/members`
   - Adds a member and returns the added member's channel payload.
+  - Protected default/system channels must be managed through admin APIs.
 - `POST /api/channels/:id/read`
 - `PATCH /api/channels/:id/settings`
 - `DELETE /api/channels/:id/messages`
 - `DELETE /api/channels/:id`
+
+### Admin
+
+- `GET /api/admin/overview`
+- `GET /api/admin/users`
+- `POST /api/admin/users`
+- `POST /api/admin/users/import`
+- `PATCH /api/admin/users/:id`
+- `POST /api/admin/users/:id/disable`
+- `POST /api/admin/users/:id/reactivate`
+- `POST /api/admin/users/:id/reset-sessions`
+- `GET /api/admin/channels`
+- `POST /api/admin/channels`
+- `PATCH /api/admin/channels/:id`
+- `POST /api/admin/channels/:id/sync-default-membership`
+- `POST /api/admin/channels/:id/members`
+- `DELETE /api/admin/channels/:id/members/:memberId`
+- `DELETE /api/admin/channels/:id`
+- `GET /api/admin/audit-logs`
 
 ### Direct messages
 

@@ -13,6 +13,8 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     const currentUserId = req.user!.id;
 
     const whereClause: any = {};
+
+    whereClause.accountStatus = 'active';
     
     if (search && typeof search === 'string') {
       const searchTerm = search.toLowerCase().trim();
@@ -26,7 +28,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
     const { count, rows: users } = await User.findAndCountAll({
       where: whereClause,
       attributes: [
-        'id', 'name', 'email', 'avatar', 'bio', 
+        'id', 'name', 'email', 'role', 'team', 'department', 'avatar', 'bio',
         'lastSeen', 'profileVisibility', 'isOnline', 'lastActive',
         'readReceipts', 'typingIndicators', 'notificationSettings',
         'createdAt', 'updatedAt'
@@ -116,7 +118,7 @@ export const getUser = async (req: AuthRequest, res: Response): Promise<void> =>
 
     const user = await User.findByPk(userId, {
       attributes: [
-        'id', 'name', 'email', 'avatar', 'bio', 
+        'id', 'name', 'email', 'role', 'team', 'department', 'avatar', 'bio',
         'lastSeen', 'profileVisibility', 'readReceipts', 
         'typingIndicators', 'notificationSettings', 'isOnline', 'lastActive'
       ],
